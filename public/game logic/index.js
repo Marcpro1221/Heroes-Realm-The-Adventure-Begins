@@ -1,33 +1,39 @@
+
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+let character = new Character(75, 75, canvas.width, canvas.height); // 75 is height and width of character
 
-const idleFrames = [];
-let currentFrame = 0;
-let frameCount = 0;
-const frameSpeed = 5;
-const totalFrames = 10;
+const key = {
+    w :{
+        pressed : false
+    },
+    a :{
+        pressed : false
+    },
+    d :{
+        pressed : false
+    }
 
-// Preload images
-for (let i = 1; i <= totalFrames; i++) {
-    const img = new Image();
-    img.src = `./Resources/Assets/Images/Idle (${i}).png`;
-    idleFrames.push(img);
-}
-
-function animate() {
+};
+function animate(){
     requestAnimationFrame(animate);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    character.draw(ctx);
+    character.update();
 
-    frameCount++;
-    if (frameCount >= frameSpeed) {
-        frameCount = 0;
-        currentFrame = (currentFrame + 1) % totalFrames;
+    character.velocity.x = 0;
+    if(key.a.pressed){
+        character.velocity.x = -5;
+    }else if(key.d.pressed){
+        character.velocity.x = 5;
+        //console.log(character.position.x);
     }
 
-    const currentImg = idleFrames[currentFrame];
-    if (currentImg.complete) { // Only draw if image is fully loaded
-        ctx.drawImage(currentImg, 150, 400, 150, 170);
-    }
 }
-
 animate();
+
+/*
+1. Understand velocity and position y
+2. keypress event & different keypress or keyrelease
+3. left and right movement
+*/
