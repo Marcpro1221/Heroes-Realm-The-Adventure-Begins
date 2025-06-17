@@ -1,11 +1,14 @@
-
-body{
-background-color: #BBFBFF;
+html{
+    height: 100%;
+    width: 100%;
+    background-image: url('Assets/Images/background.png');
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
 }
-canvas{
-    background-color:white;
-    position: absolute;
+body{
+    position:absolute;
     left: 50%;
-    top: 50%;
+    top: 40%;
     transform: translate(-50%, -50%);
 }
