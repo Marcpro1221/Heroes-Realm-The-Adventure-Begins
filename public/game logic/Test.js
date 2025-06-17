@@ -1,57 +1,106 @@
 import Sprite from './Sprite.js';
-const config = {
-    type : Phaser.AUTO,
-    width : 1031,
-    height : 1024,
-    scene : {
-        preload: preload,
-        create: create,
-        update: update
-    },
-    physics : {
-        default:'arcade',
-        arcade:{
-            gravity:{y:400},
-            debug: true
-        }
-    }
-}
-const game = new Phaser.Game(config);
 const gameState = {};
-function preload(){
-    this.load.image('bg', 'Resources/Assets/Images/map.png');
-    this.load.tilemapTiledJSON('map', 'Resources/Assets/Images/map.json');
-    Sprite.luneBlaceLoadAsset(this);
-}
-function create(){
-    Sprite.luneBlaceAnimateAsset(this);
-
+export default class MainScene extends Phaser.Scene{
+    constructor(){
+        super('MainGameScene');
+    }
+    preload(){
+     this.load.image('bg', 'Resources/Assets/Images/map2.png');
+     Sprite.repearLoadAsset(this);
+    }
+    create(){
+    Sprite.repearAnimateAsset(this);
     gameState.bg = this.add.image(0, 0, 'bg').setOrigin(0,0);
-    this.physics.world.setBounds(0, 0, gameState.bg.width, 1036);
+    gameState.ground = this.physics.add.staticImage(4512 / 2, 460 - 80 / 2, 'bg'); // Calculation for ground Collision detection
+   // gameState.platforms = this.physics.add.staticGroup();
+
+    // Idle Player & Collide
     gameState.player = this.physics.add.sprite(250, 150, 'idle');
+    gameState.player.setBounce(0.2);
     gameState.player.setCollideWorldBounds(true);
-    gameState.player.setScale(2)
+    gameState.player.setScale(2.5);
     gameState.player.body.setSize(30, 30, true);
+
+    // this.cameras.main.setBounds(0, 0, 1536, 724);
     this.cameras.main.startFollow(gameState.player, true, 0.8, 0.8);
     this.cameras.main.setFollowOffset(0, 150);
+    this.physics.world.setBounds(0, 0, gameState.bg.width, 736)
+
+    gameState.player.body.setGravityY(400);
+    //this.physics.add.collider(gameState.player, gameState.ground);
     gameState.cursors = this.input.keyboard.createCursorKeys();
-
-
-
-}
-function update(){
-    if(gameState.cursors.right.isDown){
-        gameState.player.setVelocityX(160);
-        gameState.player.anims.play('run', true)
-        gameState.player.setFlipX(false);
-        console.log(gameState.player.x)
-    }else if(gameState.cursors.left.isDown){
-        gameState.player.setVelocityX(-160);
-        gameState.player.anims.play('run', true);
-        gameState.player.setFlipX(true);
-        console.log(gameState.player.x)
-    }else{
-        gameState.player.setVelocityX(0);
-        gameState.player.anims.play('idle', true);
+    gameState.keyC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
+    gameState.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    gameState.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    gameState.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    gameState.keyV = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.V);
+    gameState.keyX = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+    gameState.keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     }
-}
+    update(){
+    const cursors = gameState.cursors;
+    const player = gameState.player;
+    const key = {
+        keyC : gameState.keyC,
+        keyA : gameState.keyA,
+        keyD : gameState.keyD,
+        keyW : gameState.keyW,
+        keyV : gameState.keyV,
+        keyX : gameState.keyX,
+        keySpace : gameState.keySpace
+    };
+
+    // LuneReaper Asset Load
+    if ((cursors.up.isDown || key.keyW.isDown) && player.body.blocked.down) {
+        player.setVelocityY(-430);
+        player.setScale(2.5);
+    }else if (!key.keyX.isDown && !key.keyV.isDown && !key.keyC.isDown && player.body.velocity.y > 0 && !player.body.touching.down) {
+        player.anims.play('idle', true); // set to frame index 2 of the jump spritesheet
+        player.setScale(2.5);
+    }else if(cursors.left.isDown || key.keyA.isDown){
+        player.setVelocityX(-280);
+        player.setFlipX(true);
+        player.anims.play('run', true);
+        console.log(player.x)// debugger
+        player.setScale(2.5);
+
+    }else if(cursors.right.isDown || key.keyD.isDown){
+        player.setVelocityX(280);
+        player.anims.play('run', true);
+        player.setFlipX(false);
+        console.log(player.x) /// debugger
+        player.setScale(2.5);
+
+    }else if(key.keyC.isDown){
+        console.log(player.anims.play('slash', true));
+        player.setVelocityX(0);
+        player.setScale(2.5);
+    }else if(key.keyX.isDown){
+        console.log( player.anims.play('double_slash', true));
+            if(player.flipX){ // use flipX properties from player object and get boolean value
+                player.setVelocityX(-50);
+            }else{
+                player.setVelocityX(50);
+            }
+            player.setScale(2.5);
+    }else if(key.keyV.isDown){
+        console.log(player.anims.play('dash', true));
+            if(player.flipX){ // use flipX properties from player object and get boolean value
+                player.x -= 10;
+            }else{
+                player.x += 10;
+            }
+            player.setScale(2.5);
+    }else if(key.keySpace.isDown && player.body.blocked.down){
+        console.log(player.anims.play('special_skill', true));
+        player.setScale(4);
+        player.setVelocityX(0);
+    }
+    else{
+        player.setVelocityX(0);
+        player.setScale(2.5);
+        player.anims.play('idle', true);
+    }
+
+    }
+}   
