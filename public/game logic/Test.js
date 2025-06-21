@@ -1,106 +1,142 @@
-import Sprite from './Sprite.js';
-const gameState = {};
-export default class MainScene extends Phaser.Scene{
-    constructor(){
-        super('MainGameScene');
+class Level extends Phaser.Scene {
+    constructor() {
+      super('Level')
+      this.heights = [4, 5]
     }
-    preload(){
-     this.load.image('bg', 'Resources/Assets/Images/map2.png');
-     Sprite.repearLoadAsset(this);
+  
+    preload() {
+      this.load.image('platform', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/platform.png');
+      this.load.image('snowflake', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/snowflake.png');
+      this.load.spritesheet('campfire', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/campfire.png',
+        { frameWidth: 32, frameHeight: 32});
+      this.load.spritesheet('codey', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/codey.png', { frameWidth: 72, frameHeight: 90})
+  
+      this.load.image('bg1', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/mountain.png');
+      this.load.image('bg2', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/trees.png');
+      this.load.image('bg3', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/snowdunes.png');
     }
-    create(){
-    Sprite.repearAnimateAsset(this);
-    gameState.bg = this.add.image(0, 0, 'bg').setOrigin(0,0);
-    gameState.ground = this.physics.add.staticImage(4512 / 2, 460 - 80 / 2, 'bg'); // Calculation for ground Collision detection
-   // gameState.platforms = this.physics.add.staticGroup();
-
-    // Idle Player & Collide
-    gameState.player = this.physics.add.sprite(250, 150, 'idle');
-    gameState.player.setBounce(0.2);
-    gameState.player.setCollideWorldBounds(true);
-    gameState.player.setScale(2.5);
-    gameState.player.body.setSize(30, 30, true);
-
-    // this.cameras.main.setBounds(0, 0, 1536, 724);
-    this.cameras.main.startFollow(gameState.player, true, 0.8, 0.8);
-    this.cameras.main.setFollowOffset(0, 150);
-    this.physics.world.setBounds(0, 0, gameState.bg.width, 736)
-
-    gameState.player.body.setGravityY(400);
-    //this.physics.add.collider(gameState.player, gameState.ground);
-    gameState.cursors = this.input.keyboard.createCursorKeys();
-    gameState.keyC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
-    gameState.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-    gameState.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    gameState.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
-    gameState.keyV = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.V);
-    gameState.keyX = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
-    gameState.keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+  
+    create() {
+      gameState.active = true
+  
+      gameState.player = this.physics.add.sprite(125, 110, 'codey').setScale(.5);
+      gameState.player.setScale(1)
+      gameState.platforms = this.physics.add.staticGroup();
+  
+      this.createAnimations();
+      //this.levelSetup();
+        gameState.platforms.create(50,  400, 'platform').setOrigin(0, 0.5).refreshBody();
+      this.cameras.main.setBounds(0, 0, gameState.width, gameState.height);
+      this.physics.world.setBounds(0, 0, gameState.width, gameState.height + gameState.player.height);
+  
+      this.cameras.main.startFollow(gameState.player, true, 0.5, 0.5)
+      gameState.player.setCollideWorldBounds(true);
+  
+      this.physics.add.collider(gameState.player, gameState.platforms);
+  
+      gameState.cursors = this.input.keyboard.createCursorKeys();
     }
-    update(){
-    const cursors = gameState.cursors;
-    const player = gameState.player;
-    const key = {
-        keyC : gameState.keyC,
-        keyA : gameState.keyA,
-        keyD : gameState.keyD,
-        keyW : gameState.keyW,
-        keyV : gameState.keyV,
-        keyX : gameState.keyX,
-        keySpace : gameState.keySpace
-    };
-
-    // LuneReaper Asset Load
-    if ((cursors.up.isDown || key.keyW.isDown) && player.body.blocked.down) {
-        player.setVelocityY(-430);
-        player.setScale(2.5);
-    }else if (!key.keyX.isDown && !key.keyV.isDown && !key.keyC.isDown && player.body.velocity.y > 0 && !player.body.touching.down) {
-        player.anims.play('idle', true); // set to frame index 2 of the jump spritesheet
-        player.setScale(2.5);
-    }else if(cursors.left.isDown || key.keyA.isDown){
-        player.setVelocityX(-280);
-        player.setFlipX(true);
-        player.anims.play('run', true);
-        console.log(player.x)// debugger
-        player.setScale(2.5);
-
-    }else if(cursors.right.isDown || key.keyD.isDown){
-        player.setVelocityX(280);
-        player.anims.play('run', true);
-        player.setFlipX(false);
-        console.log(player.x) /// debugger
-        player.setScale(2.5);
-
-    }else if(key.keyC.isDown){
-        console.log(player.anims.play('slash', true));
-        player.setVelocityX(0);
-        player.setScale(2.5);
-    }else if(key.keyX.isDown){
-        console.log( player.anims.play('double_slash', true));
-            if(player.flipX){ // use flipX properties from player object and get boolean value
-                player.setVelocityX(-50);
-            }else{
-                player.setVelocityX(50);
-            }
-            player.setScale(2.5);
-    }else if(key.keyV.isDown){
-        console.log(player.anims.play('dash', true));
-            if(player.flipX){ // use flipX properties from player object and get boolean value
-                player.x -= 10;
-            }else{
-                player.x += 10;
-            }
-            player.setScale(2.5);
-    }else if(key.keySpace.isDown && player.body.blocked.down){
-        console.log(player.anims.play('special_skill', true));
-        player.setScale(4);
-        player.setVelocityX(0);
+  
+    createPlatform(xIndex, yIndex) {
+      // Creates a platform evenly spaced along the two indices.
+      // If either is not a number it won't make a platform
+        if (typeof yIndex === 'number' && typeof xIndex === 'number') {
+          gameState.platforms.create((220 * xIndex),  yIndex * 70, 'platform').setOrigin(0, 0.5).refreshBody();
+        }
     }
-    else{
-        player.setVelocityX(0);
-        player.setScale(2.5);
-        player.anims.play('idle', true);
+  
+    createAnimations() {
+      this.anims.create({
+        key: 'run',
+        frames: this.anims.generateFrameNumbers('codey', { start: 0, end: 3 }),
+        frameRate: 10,
+        repeat: -1
+      });
+  
+      this.anims.create({
+        key: 'idle',
+        frames: this.anims.generateFrameNumbers('codey', { start: 4, end: 5 }),
+        frameRate: 10,
+        repeat: -1
+      });
+  
+      this.anims.create({
+        key: 'jump',
+        frames: this.anims.generateFrameNumbers('codey', { start: 2, end: 3 }),
+        frameRate: 10,
+        repeat: -1
+      })
+  
+      this.anims.create({
+        key: 'fire',
+        frames: this.anims.generateFrameNumbers('campfire'),
+        frameRate: 10,
+        repeat: -1
+      })
     }
-
+  
+    levelSetup() {
+      for (const [xIndex, yIndex] of this.heights.entries()) {
+        // call createPlatform here with xIndex and yIndex
+        this.createPlatform(xIndex, yIndex);
+      } 
     }
-}   
+  
+    update() {
+      if(gameState.active){
+        if (gameState.cursors.right.isDown) {
+          gameState.player.flipX = false;
+          gameState.player.setVelocityX(gameState.speed);
+          gameState.player.anims.play('run', true);
+        } else if (gameState.cursors.left.isDown) {
+          gameState.player.flipX = true;
+          gameState.player.setVelocityX(-gameState.speed);
+          gameState.player.anims.play('run', true);
+        } else {
+          gameState.player.setVelocityX(0);
+          gameState.player.anims.play('idle', true);
+        }
+  
+        if (Phaser.Input.Keyboard.JustDown(gameState.cursors.space) && gameState.player.body.touching.down) {
+          gameState.player.anims.play('jump', true);
+          gameState.player.setVelocityY(-500);
+        }
+  
+        if (!gameState.player.body.touching.down){
+          gameState.player.anims.play('jump', true);
+        }
+  
+        if (gameState.player.y > gameState.height) {
+  
+        }
+      }
+    }
+  }
+  
+  const gameState = {
+    speed: 240,
+    ups: 380,
+    width: 2000,
+    height: 600,
+  };
+  
+  const config = {
+    type: Phaser.AUTO,
+    width: 500,
+    height: 600,
+    fps: {target: 60},
+    backgroundColor: "b9baff",
+    physics: {
+      default: 'arcade',
+      arcade: {
+        gravity: { y: 800 },
+        enableBody: true,
+        debug: true
+  
+      }
+    },
+    scene: [Level]
+  };
+  
+  const game = new Phaser.Game(config);
+  

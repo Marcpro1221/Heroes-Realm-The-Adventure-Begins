@@ -1,5 +1,5 @@
 export default class Sprite{
-    static luneBlaceLoadAsset(loadAsset){
+    static luneBladeLoadAsset(loadAsset){
 
         loadAsset.load.spritesheet('idle', 'Resources/Assets/Sprite_Sheet_Luneblace/Idle.png', {
             frameWidth : 144,
@@ -38,7 +38,7 @@ export default class Sprite{
             frameHeight : 144
         });
     }
-    static luneBlaceAnimateAsset(loadAsset){
+    static luneBladeAnimateAsset(loadAsset){
         loadAsset.anims.create({ // Run Animation sprite
             key: 'run',
             frames : loadAsset.anims.generateFrameNumbers('run',{start: 0, end: 7}),
@@ -71,7 +71,7 @@ export default class Sprite{
         });
         loadAsset.anims.create({
             key: 'thrust',
-            frames: loadAsset.anims.generateFrameNumbers('thrust',{start: 0, end:13}),
+            frames: loadAsset.anims.generateFrameNumbers('thrust',{start: 5, end:13}),
             frameRate: 20,
             repeat: -1
         })
@@ -83,7 +83,7 @@ export default class Sprite{
         });
         loadAsset.anims.create({
             key : 'spinAttack',
-            frames : loadAsset.anims.generateFrameNumbers('spinAttack',{start:0, end: 12}),
+            frames : loadAsset.anims.generateFrameNumbers('spinAttack',{start:5, end: 12}),
             frameRate : 10,
             repeat : -1
         })
@@ -190,5 +190,13 @@ export default class Sprite{
             frameRate: 10,
             repeat: -1
         });
+    }
+    static backgroundSprite(loadAsset){
+        loadAsset.load.image('ruins', 'Resources/Assets/Images/ruins.png');
+        loadAsset.load.image('clouds', 'Resources/Assets/Images/clouds.png')
+        loadAsset.load.image('mountain', 'Resources/Assets/Images/mountain.png');
+        loadAsset.load.image('trees', 'Resources/Assets/Images/trees.png');
+        loadAsset.load.image('ground', 'Resources/Assets/Images/ground.png');
+        loadAsset.load.audio('grassy_biome', 'Resources/Assets/Music-Sounds/Grassy_Biome.mp3');
     }
 }

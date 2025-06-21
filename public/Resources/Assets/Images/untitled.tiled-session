@@ -1,0 +1,119 @@
+{
+    "Map/SizeTest": {
+        "height": 4300,
+        "width": 2
+    },
+    "activeFile": "",
+    "expandedProjectPaths": [
+    ],
+    "fileStates": {
+        "": {
+            "scaleInDock": 0.33,
+            "scaleInEditor": 1
+        },
+        "#Grassy Biome - Copy": {
+            "scaleInDock": 0.33
+        },
+        "#clouds - Copy": {
+            "scaleInDock": 0.75
+        },
+        "#map": {
+            "scaleInDock": 1
+        },
+        "#map2": {
+            "scaleInDock": 0.33
+        },
+        "#map2 - Copy": {
+            "scaleInEditor": 1
+        },
+        "#mountain": {
+            "scaleInDock": 0.33
+        },
+        "#mountain - Copy": {
+            "scaleInDock": 0.75
+        },
+        "#ruins - Copy": {
+            "scaleInDock": 0.75
+        },
+        "#trees": {
+            "scaleInDock": 0.33
+        },
+        "#trees - Copy": {
+            "scaleInDock": 1
+        },
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/Trees.tmx": {
+            "scale": 0.125,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 2004,
+                "y": 268
+            }
+        },
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/Trees.tmx#trees - Copy": {
+            "scaleInDock": 1
+        },
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/clouds.tmx": {
+            "scale": 0.33,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 2543.939393939394,
+                "y": -253.030303030303
+            }
+        },
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/clouds.tmx#clouds - Copy": {
+            "scaleInDock": 0.75
+        },
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/mountain.tmx": {
+            "scale": 0.25,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 4298,
+                "y": -562
+            }
+        },
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/mountain.tmx#mountain - Copy": {
+            "scaleInDock": 0.75
+        },
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/platform.tmx": {
+            "scale": 0.75,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 346,
+                "y": -134
+            }
+        },
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/platform.tmx#ground2 - Copy": {
+            "scaleInDock": 0.75
+        },
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/ruins.tmx": {
+            "scale": 0.125,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 2420,
+                "y": -1468
+            }
+        },
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/ruins.tmx#ruins - Copy": {
+            "scaleInDock": 0.75
+        }
+    },
+    "last.imagePath": "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev",
+    "map.height": 7,
+    "map.lastUsedFormat": "tmx",
+    "map.width": 148,
+    "openFiles": [
+    ],
+    "project": "untitled.tiled-project",
+    "recentFiles": [
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/platform.tmx",
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/ruins.tmx",
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/mountain.tmx",
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/clouds.tmx",
+        "C:/Users/Marc Roland Soniega/Documents/developer/Game Dev/Heroes-Realm-The-Adventure-Begins/public/Resources/Assets/tmx/Trees.tmx"
+    ],
+    "tileset.embedInMap": true,
+    "tileset.tileSize": {
+        "height": 32,
+        "width": 32
+    }
+}
