@@ -1,4 +1,5 @@
 import Sprite from './Sprite.js';
+import config from './index.js';
 export default class MainScene extends Phaser.Scene{
     constructor(){
         super('MainGameScene');
@@ -11,18 +12,42 @@ export default class MainScene extends Phaser.Scene{
     create(){
         Sprite.luneBladeAnimateAsset(this);
         //Sprite.repearAnimateAsset(this);
-        this.createParallaxBackground(); // parallax background image
-        this.createSoundEffects(); // background music and sound effect
-        this.createKeys(); // create charcter keys
-
+        gameState.portal = this.add.image((gameState.width / 2) - 950, gameState.height - 1100, 'portal').setDepth(11);
+        const single_platform_position = [
+            {x: (gameState.width / 2) - 950, y: gameState.height - 950},
+            {x: gameState.width - 550, y: gameState.height - 250}, 
+            {x: gameState.width - 550, y: gameState.height - 930},
+            {x: gameState.width - 230, y: gameState.height - 330}
+        ]
         gameState.player = this.physics.add.sprite(250, 150, 'idle').setDepth(100);
         gameState.platforms = this.physics.add.staticGroup(); //for all platform type
         gameState.platforms.create(0, gameState.height - 100, 'ground').setOrigin(0, 0).refreshBody().setDepth(10).setScrollFactor(1); //224 is the ground height
+        gameState.platforms.create((gameState.width / 2) - 600, 700, 'upper_platform').setOrigin(0, 0).refreshBody().setDepth(10).setScrollFactor(1);
+        gameState.platforms.create((gameState.width) - 1250, gameState.height - 1080, 'medium_platform').setOrigin(0, 0).refreshBody().setDepth(10).setScrollFactor(1);
+
+        single_platform_position.forEach(platform => gameState.platforms.create(platform.x, platform.y, 'single_platform').setOrigin(0, 0).refreshBody().setDepth(10).setScrollFactor(1));
+         this.tweens.add({
+            targets: gameState.platforms.getChildren()[6],
+            y: gameState.height - 830,
+            ease: 'linear',
+            duration: 3000,
+            paused: false,
+            repeat: -1,
+            yoyo: true,
+            onUpdate: () => {
+                // Sync physics body with the tweened position
+                gameState.platforms.getChildren()[6].body.updateFromGameObject();
+              }
+        });
+        
         gameState.player.body.setSize(25, 15, true);
         gameState.player.setCollideWorldBounds(true);
 
-        console.log(gameState.player.body); // debugger of character physics body size
+        this.createParallaxBackground();
+        this.createKeys(); 
+        this.createSoundEffects(); // background music and sound effect
 
+        console.log(gameState.platforms.getChildren()[1].height);
         this.cameras.main.setBounds(0, 0, gameState.width, gameState.height);
         this.cameras.main.startFollow(gameState.player, true, 0.8, 0.8);
         this.cameras.main.setFollowOffset(100, 0.5);
@@ -105,7 +130,7 @@ export default class MainScene extends Phaser.Scene{
         function luneBladeMovement(){
         // Lune Blade Asset Load
             if ((cursors.up.isDown || key.keyW.isDown) && player.body.blocked.down) {
-                player.setVelocityY(-430);
+                player.setVelocityY(-550);
                 player.setScale(2.5);
             }else if (!key.keyX.isDown && !key.keyV.isDown && !key.keyC.isDown && player.body.velocity.y > 0 && !player.body.touching.down) {
                 player.anims.play('fall', true); // set to frame index 2 of the jump spritesheet
@@ -162,6 +187,7 @@ export default class MainScene extends Phaser.Scene{
     createSoundEffects(){
         this.sound.add('grassy_biome', { loop: true, volume: 2}).play();//sounds
     }
+    
     createKeys(){ 
         gameState.cursors = this.input.keyboard.createCursorKeys();
         gameState.keyC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
@@ -174,15 +200,14 @@ export default class MainScene extends Phaser.Scene{
 
     }
     createParallaxBackground(){
-        gameState.clouds = this.add.image(0, gameState.height - 1050, 'clouds').setOrigin(0, 0).setDepth(1);
-        gameState.mountain = this.add.image(0, gameState.height - 770, 'mountain').setOrigin(0, 0).setDepth(2);
-        gameState.ruins = this.add.image(0, gameState.height - 770, 'ruins').setOrigin(0, 0).setDepth(3);
-        gameState.trees = this.add.image(0, gameState.height - 520, 'trees').setOrigin(0, 0).setDepth(5);
-
-        gameState.clouds.setScrollFactor(0.2);
-        gameState.mountain.setScrollFactor(0.4);
-        gameState.ruins.setScrollFactor(0.6)
-        gameState.trees.setScrollFactor(0.8);
+        gameState.clouds = this.add.image(0, gameState.height - 1450, 'clouds').setOrigin(0, 0).setDepth(1);
+        gameState.mountain = this.add.image(0, gameState.height - 970, 'mountain').setOrigin(0, 0).setDepth(2);
+        gameState.ruins = this.add.image(0, config.height, 'ruins').setOrigin(0, 0).setDepth(3);
+        gameState.trees = this.add.image(0, gameState.height - 650, 'trees').setOrigin(0, 0).setDepth(5);
+        gameState.clouds.setScrollFactor(0.2, 0.1);
+        gameState.mountain.setScrollFactor(0.5, 0.4);
+        gameState.ruins.setScrollFactor(0.5, 0.5);
+        gameState.trees.setScrollFactor(0.7, 0.7);
     }
 }   
 

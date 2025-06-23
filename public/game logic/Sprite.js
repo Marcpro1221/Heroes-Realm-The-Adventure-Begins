@@ -198,5 +198,10 @@ export default class Sprite{
         loadAsset.load.image('trees', 'Resources/Assets/Images/trees.png');
         loadAsset.load.image('ground', 'Resources/Assets/Images/ground.png');
         loadAsset.load.audio('grassy_biome', 'Resources/Assets/Music-Sounds/Grassy_Biome.mp3');
-    }
+        loadAsset.load.image('upper_platform', 'Resources/Assets/Images/big_platforms.png');
+        loadAsset.load.image('single_tree', 'Resources/Assets/Images/single_tree.png');
+        loadAsset.load.image('single_platform', 'Resources/Assets/Images/single_platform.png');
+        loadAsset.load.image('medium_platform', 'Resources/Assets/Images/medium_platform.png');
+        loadAsset.load.image('portal', 'Resources/Assets/Images/portal.png');
+    } 
 }

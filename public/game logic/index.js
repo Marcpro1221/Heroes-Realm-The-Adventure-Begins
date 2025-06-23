@@ -1,7 +1,7 @@
 import CharacterSelection from './CharacterSelection.js';
 import MainScene from './MainScene.js';
  window.gameState = {
-    height: 1224,
+    height: 1524,
     width: 4708
     
  };
@@ -15,7 +15,7 @@ const config = {
         default:'arcade',
         arcade:{
             gravity:{y:800},
-            debug:false
+            debug:true
         }
     }
 }
