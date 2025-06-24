@@ -4,7 +4,7 @@ export default class CharacterSelection extends Phaser.Scene{
 
     }
     preload(){
-        this.load.image('menu', '/Resources/Assets/Images/GameMenu2.png');
+        this.load.image('menu', 'Resources/Assets/Images/GameMenu2.png');
         this.load.audio('journey', 'Resources/Assets/Music-Sounds/The_Journey.mp3');
     }
     create(){
