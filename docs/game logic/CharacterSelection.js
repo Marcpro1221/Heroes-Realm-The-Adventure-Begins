@@ -16,8 +16,10 @@ export default class CharacterSelection extends Phaser.Scene{
     }
     update(){
         if(this.spaceKey.isDown){
+            this.scene.stop('CharacterSelectionScene');
+            this.scene.launch('PlayerScene');
             this.scene.start('MainGameScene');
-            console.log(gameState.bgMusic.stop())
+            console.log(gameState.bgMusic.stop());
         }
     }
 }

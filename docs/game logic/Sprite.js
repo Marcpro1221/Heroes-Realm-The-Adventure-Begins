@@ -37,6 +37,10 @@ export default class Sprite{
             frameWidth : 144,
             frameHeight : 144
         });
+        loadAsset.load.spritesheet('hurt', 'Resources/Assets/Sprite_Sheet_Luneblace/Hurt.png',{
+            frameWidth : 144,
+            frameHeight : 144
+        })
     }
     static luneBladeAnimateAsset(loadAsset){
         loadAsset.anims.create({ // Run Animation sprite
@@ -99,11 +103,16 @@ export default class Sprite{
             frameRate : 5,
             repeat: -1
         });
-    
         loadAsset.anims.create({
             key: 'left',
             frames: loadAsset.anims.generateFrameNumbers('run', { start: 0, end: 7}),
             frameRate: 5,
+            repeat: -1
+        });
+        loadAsset.anims.create({
+            key: 'hurt',
+            frames: loadAsset.anims.generateFrameNumbers('hurt', { start: 0, end: 2}),
+            frameRate: 10,
             repeat: -1
         });
     }
@@ -187,6 +196,30 @@ export default class Sprite{
         loadAsset.anims.create({ // Run Animation sprite
             key: 'surprise_jump',
             frames : loadAsset.anims.generateFrameNumbers('surprise_jump',{start: 0, end: 19}),
+            frameRate: 10,
+            repeat: -1
+        });
+    }
+    static enemySprites(loadAsset){
+        loadAsset.load.spritesheet('enemy_walk', 'Resources/Assets/Huge_mushroom/HugeMushroom_walk.png',{
+            frameWidth : 72,
+            frameHeight : 72
+        });
+        loadAsset.load.spritesheet('enemy_idle', 'Resources/Assets/Huge_mushroom/HugeMushroom_idle.png',{
+            frameWidth : 72,
+            frameHeight : 72
+        });
+    }
+    static enemyMovement(loadAsset){
+        loadAsset.anims.create({ // Run Animation sprite
+            key: 'enemy_walk',
+            frames : loadAsset.anims.generateFrameNumbers('enemy_walk',{start: 0, end: 5}),
+            frameRate: 10,
+            repeat: -1
+        });
+        loadAsset.anims.create({ // Run Animation sprite
+            key: 'enemy_idle',
+            frames : loadAsset.anims.generateFrameNumbers('enemy_idle',{start: 0, end: 3}),
             frameRate: 10,
             repeat: -1
         });
