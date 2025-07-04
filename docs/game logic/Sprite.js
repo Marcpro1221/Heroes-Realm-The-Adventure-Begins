@@ -64,8 +64,8 @@ export default class Sprite{
         loadAsset.anims.create({ // jump animation sprite
             key: 'jump',
             frames: loadAsset.anims.generateFrameNumbers('jump',{start: 0, end: 5}),
-            frameRate: 15,
-            repeat: -1
+            frameRate: 5,
+            repeat: 0
         });
         loadAsset.anims.create({ // jump animation sprite
             key: 'fall',
@@ -77,25 +77,25 @@ export default class Sprite{
             key: 'thrust',
             frames: loadAsset.anims.generateFrameNumbers('thrust',{start: 5, end:13}),
             frameRate: 20,
-            repeat: -1
+            repeat: 0
         })
         loadAsset.anims.create({
             key: 'smash',
             frames: loadAsset.anims.generateFrameNumbers('smash',{start: 0, end:16}),
             frameRate: 13,
-            repeat: -1
+            repeat: 0,
         });
         loadAsset.anims.create({
             key : 'spinAttack',
             frames : loadAsset.anims.generateFrameNumbers('spinAttack',{start:5, end: 12}),
             frameRate : 10,
-            repeat : -1
-        })
+            repeat : 0,
+        });
         loadAsset.anims.create({
             key : 'specialAttack',
             frames : loadAsset.anims.generateFrameNumbers('specialAttack',{start:0, end: 17}),
             frameRate : 10,
-            repeat : -1
+            repeat : 0
         });
         loadAsset.anims.create({
             key: 'right',
@@ -113,7 +113,7 @@ export default class Sprite{
             key: 'hurt',
             frames: loadAsset.anims.generateFrameNumbers('hurt', { start: 0, end: 2}),
             frameRate: 10,
-            repeat: -1
+            repeat: 0
         });
     }
     static repearLoadAsset(loadAsset){

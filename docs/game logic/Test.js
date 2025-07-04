@@ -1,142 +1,170 @@
-class Level extends Phaser.Scene {
-    constructor() {
-      super('Level')
-      this.heights = [4, 5]
+class Test extends Phaser.Scene{
+    constructor(){
+        super('Test');
+        
     }
-  
-    preload() {
-      this.load.image('platform', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/platform.png');
-      this.load.image('snowflake', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/snowflake.png');
-      this.load.spritesheet('campfire', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/campfire.png',
-        { frameWidth: 32, frameHeight: 32});
-      this.load.spritesheet('codey', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/codey.png', { frameWidth: 72, frameHeight: 90})
-  
-      this.load.image('bg1', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/mountain.png');
-      this.load.image('bg2', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/trees.png');
-      this.load.image('bg3', 'https://content.codecademy.com/courses/learn-phaser/Codey%20Tundra/snowdunes.png');
+    preload(){
+        this.load.spritesheet('idle', 'Resources/Assets/Sprite_Sheet_Luneblace/Idle.png', {
+            frameWidth : 144,
+            frameHeight : 144
+        });
+        this.load.spritesheet('run', 'Resources/Assets/Sprite_Sheet_Luneblace/Run.png',{
+            frameWidth : 144,
+            frameHeight : 144
+        });
+        this.load.spritesheet('smash', 'Resources/Assets/Sprite_Sheet_Luneblace/Smash.png',{
+            frameWidth : 144,
+            frameHeight : 144
+        });
+        this.load.spritesheet('jump', 'Resources/Assets/Sprite_Sheet_Luneblace/Jump.png',{
+            frameWidth : 144,
+            frameHeight : 144
+        });
+
     }
-  
-    create() {
-      gameState.active = true
-  
-      gameState.player = this.physics.add.sprite(125, 110, 'codey').setScale(.5);
-      gameState.player.setScale(1)
-      gameState.platforms = this.physics.add.staticGroup();
-  
-      this.createAnimations();
-      //this.levelSetup();
-        gameState.platforms.create(50,  400, 'platform').setOrigin(0, 0.5).refreshBody();
-      this.cameras.main.setBounds(0, 0, gameState.width, gameState.height);
-      this.physics.world.setBounds(0, 0, gameState.width, gameState.height + gameState.player.height);
-  
-      this.cameras.main.startFollow(gameState.player, true, 0.5, 0.5)
-      gameState.player.setCollideWorldBounds(true);
-  
-      this.physics.add.collider(gameState.player, gameState.platforms);
-  
-      gameState.cursors = this.input.keyboard.createCursorKeys();
+    create(){
+
+        this.anims.create({ // Idle animation sprite
+            key: 'idle',
+            frames: this.anims.generateFrameNumbers('idle',{start: 0, end: 7}),
+            frameRate: 10,
+            repeat: -1
+        });
+        this.anims.create({ // Smash animation sprite
+            key: 'smash',
+            frames: this.anims.generateFrameNumbers('smash',{start: 0, end:16}),
+            frameRate: 15,
+            repeat: 0,
+        });
+        this.anims.create({ // Run Animation sprite
+            key: 'run',
+            frames : this.anims.generateFrameNumbers('run',{start: 0, end: 7}),
+            frameRate: 10,
+            repeat: -1
+        });
+        this.anims.create({ // Run Animation sprite
+            key: 'jump',
+            frames : this.anims.generateFrameNumbers('jump',{start: 0, end: 5}),
+            frameRate: 10,
+            repeat: -1
+        });
+        this.hitpoint = 100;
+
+        this.player = this.physics.add.sprite(100, 100, 'idle').setDepth(100);
+        this.player.body.setSize(15, 18, true);
+        this.player.setScale(2.5);
+        this.player.setCollideWorldBounds(true);
+        this.player.swordSwing = false;
+
+        this.hpText = this.add.text(config.width - 80, config.height - 120, `HP: ${this.hitpoint}`)
+
+        this.box = this.add.rectangle(config.width - 50, config.height - 50, 40, 80, 0xd3d3d3, 0.5);
+        this.swordHitBox = this.add.rectangle(this.player.x, this.player.y, 65, 40, 0xd3d3d3, 0.3);
+        this.swordHitBox.setVisible(false);
+        this.physics.add.existing(this.box, true);
+        this.physics.add.existing(this.swordHitBox, true);
+        this.swordHitBox.body.enable = false;
+        this.physics.add.overlap(this.box, this.swordHitBox, ()=>{
+            this.box.fillColor = 0xff0000;
+            this.box.fillAlpha = 1;
+            console.log('Hit!');
+            this.isOverLap = true;
+            console.log(this.hitpoint -= Math.random() * 2);
+
+                if(this.hitpoint <= 0){
+                    this.hitpoint = 100;
+                }
+            this.hpText.setText(`HP: ${Math.floor(this.hitpoint)}`);
+            
+        });
+        this.keys = this.input.keyboard.createCursorKeys();
     }
-  
-    createPlatform(xIndex, yIndex) {
-      // Creates a platform evenly spaced along the two indices.
-      // If either is not a number it won't make a platform
-        if (typeof yIndex === 'number' && typeof xIndex === 'number') {
-          gameState.platforms.create((220 * xIndex),  yIndex * 70, 'platform').setOrigin(0, 0.5).refreshBody();
+    update(){
+
+        this.player.setVelocityX(0);
+        let movingX = false;
+        let movingY = false;
+        this.isOverLap = false;
+
+        if(!this.player.swordSwing){
+            if(this.keys.space.isDown){
+                this.player.swordSwing = true; 
+                this.player.anims.play('smash', true);
+                    this.player.once('animationcomplete', ()=>{
+                        this.player.anims.play('idle', true);
+                        this.player.swordSwing = false;
+                    });
+            }else{
+                if(this.keys.up.isDown){
+                    this.player.setVelocityY(-100);
+                    this.player.anims.play('jump', true);
+                    movingY = true;
+                    
+                }else if(this.keys.down.isDown){
+                    this.player.setVelocityY(100);
+                    this.player.anims.play('jump', true);
+                    movingY = true;
+                }
+                if(this.keys.left.isDown){
+                    this.player.setVelocityX(-100);
+                    this.player.anims.play('run', true);
+                    this.player.setFlipX(true);
+                    movingX = true;
+                    
+                }else if(this.keys.right.isDown){
+                    this.player.setVelocityX(100);
+                    this.player.setFlipX(false);
+                    this.player.anims.play('run', true);
+                    movingX = true;
+                }  
+                if(!movingX && !movingY){
+                    this.player.anims.play('idle', true);
+                }
+            }
         }
-    }
-  
-    createAnimations() {
-      this.anims.create({
-        key: 'run',
-        frames: this.anims.generateFrameNumbers('codey', { start: 0, end: 3 }),
-        frameRate: 10,
-        repeat: -1
-      });
-  
-      this.anims.create({
-        key: 'idle',
-        frames: this.anims.generateFrameNumbers('codey', { start: 4, end: 5 }),
-        frameRate: 10,
-        repeat: -1
-      });
-  
-      this.anims.create({
-        key: 'jump',
-        frames: this.anims.generateFrameNumbers('codey', { start: 2, end: 3 }),
-        frameRate: 10,
-        repeat: -1
-      })
-  
-      this.anims.create({
-        key: 'fire',
-        frames: this.anims.generateFrameNumbers('campfire'),
-        frameRate: 10,
-        repeat: -1
-      })
-    }
-  
-    levelSetup() {
-      for (const [xIndex, yIndex] of this.heights.entries()) {
-        // call createPlatform here with xIndex and yIndex
-        this.createPlatform(xIndex, yIndex);
-      } 
-    }
-  
-    update() {
-      if(gameState.active){
-        if (gameState.cursors.right.isDown) {
-          gameState.player.flipX = false;
-          gameState.player.setVelocityX(gameState.speed);
-          gameState.player.anims.play('run', true);
-        } else if (gameState.cursors.left.isDown) {
-          gameState.player.flipX = true;
-          gameState.player.setVelocityX(-gameState.speed);
-          gameState.player.anims.play('run', true);
-        } else {
-          gameState.player.setVelocityX(0);
-          gameState.player.anims.play('idle', true);
+
+        if(this.player.flipX){
+            this.swordHitBox.x = this.player.x - 55;
+            this.swordHitBox.y = this.player.y;
+        }else{
+            this.swordHitBox.x = this.player.x + 55;
+            this.swordHitBox.y = this.player.y;
         }
-  
-        if (Phaser.Input.Keyboard.JustDown(gameState.cursors.space) && gameState.player.body.touching.down) {
-          gameState.player.anims.play('jump', true);
-          gameState.player.setVelocityY(-500);
+        this.swordHitBox.body.updateFromGameObject();
+        
+        if (!this.isOverLap && !this.resettingColor) {
+            this.resettingColor = true;
+            this.time.delayedCall(50, () => {
+                this.box.fillColor = 0xd3d3d3;
+                this.box.fillAlpha = 0.5;
+                this.resettingColor = false;
+            });
         }
-  
-        if (!gameState.player.body.touching.down){
-          gameState.player.anims.play('jump', true);
-        }
-  
-        if (gameState.player.y > gameState.height) {
-  
-        }
-      }
+        if(this.player.anims.currentFrame.index === 11 && this.player.anims.currentAnim.key === 'smash'){ // hitbox visible on frame index 11
+            this.swordHitBox.body.enable = true;
+        }else if(this.player.anims.currentFrame.index === 15 && this.player.anims.currentAnim.key === 'smash'){ // hitbox not visible on frame index 15
+            this.swordHitBox.body.enable = false;
+        } 
+        console.log(this.player.anims.currentAnim.key);
     }
-  }
-  
-  const gameState = {
-    speed: 240,
-    ups: 380,
-    width: 2000,
-    height: 600,
-  };
-  
-  const config = {
-    type: Phaser.AUTO,
-    width: 500,
-    height: 600,
-    fps: {target: 60},
-    backgroundColor: "b9baff",
-    physics: {
-      default: 'arcade',
-      arcade: {
-        gravity: { y: 800 },
-        enableBody: true,
-        debug: true
-  
-      }
+
+}
+
+
+
+
+const config = {
+    type : Phaser.AUTO,
+    width : 536,
+    height : 336,
+    backgroundColor: 0x000000,
+    scene : [Test],
+    physics : {
+        default:'arcade',
+        arcade:{
+            gravity:{y:800},
+            debug:true
+        }
     },
-    scene: [Level]
-  };
-  
+  }
   const game = new Phaser.Game(config);
-  

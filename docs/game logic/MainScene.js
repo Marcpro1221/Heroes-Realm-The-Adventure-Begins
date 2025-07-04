@@ -1,5 +1,7 @@
 import Sprite from './Sprite.js';
 import config from './index.js';
+import Player from './CharacterScene/Player.js';
+import Enemy from './CharacterScene/Enemy.js';
 export default class MainScene extends Phaser.Scene{
     constructor(){
         super('MainGameScene');
@@ -14,8 +16,13 @@ export default class MainScene extends Phaser.Scene{
         Sprite.enemyMovement(this);
         Sprite.luneBladeAnimateAsset(this);
         //Sprite.repearAnimateAsset(this);
+
+        gameState.platforms = this.physics.add.staticGroup();
+        gameState.enemy = this.physics.add.group();
+
         gameState.portal = this.add.image((gameState.width / 2) - 950, gameState.height - 1100, 'portal').setDepth(11);
         this.add.text((gameState.width / 2) - 850, gameState.height - 1100, 'COMING SOON....');
+
         const single_platform_position = [
             {x: (gameState.width / 2) - 950, y: gameState.height - 950}, // platform position x & y
             {x: gameState.width - 550, y: gameState.height - 250}, 
@@ -32,15 +39,11 @@ export default class MainScene extends Phaser.Scene{
                                {x: 3000, y: 500},
                                {x: 3000, y: 500},
                             ];
+                   
 
-        gameState.enemyMushroom = this.physics.add.group();                       
+        gameState.player = new Player(this, 250, 1250, 'idle');
 
-        gameState.player = this.physics.add.sprite(250, 1250, 'idle').setDepth(100);
-        gameState.player.body.setSize(15, 18, true);
-        gameState.player.body.setOffset(65, 63); // position x & y relative to the spritesheet
-        gameState.player.setCollideWorldBounds(true);
-
-        gameState.platforms = this.physics.add.staticGroup(); //for all platform type
+         //for all platform type
         gameState.platforms.create(0, gameState.height - 100, 'ground').setOrigin(0, 0).refreshBody().setDepth(10).setScrollFactor(1); //224 is the ground height
         gameState.platforms.create((gameState.width / 2) - 600, 700, 'upper_platform').setOrigin(0, 0).refreshBody().setDepth(10).setScrollFactor(1);
         gameState.platforms.create((gameState.width) - 1250, gameState.height - 1080, 'medium_platform').setOrigin(0, 0).refreshBody().setDepth(10).setScrollFactor(1);
@@ -49,62 +52,53 @@ export default class MainScene extends Phaser.Scene{
         
         this.enemyPosition.forEach((enemyPos, i) => {
             setTimeout(()=>{ //delay of enemy spawn
-                const enemy = gameState.enemyMushroom.create(enemyPos.x, enemyPos.y, 'enemy_walk');
+                const enemy = new Enemy(this, enemyPos.x, enemyPos.y, 'enemy_walk');
                 enemy.body.setSize(40, 65, true);
-                enemy
-                    .setOrigin(0, 0)
-                    .setScale(2)
-                    .setDepth(10)
-                    .setScrollFactor(1)
-                    .refreshBody(); 
-                    
+                enemy.setScale(1.5).refreshBody(); 
+                enemy.update(); // enemy tweens or movement
+                gameState.enemy.add(enemy); // add enemy to the group
+
                 this.physics.add.collider(enemy,gameState.platforms); // collider for each enemy
                 this.physics.add.overlap(gameState.player, enemy, (player, enemy)=>{
                     console.log('Collided!');
                     if (!player.isHurting) { // custom flag to prevent repeat
                         player.isHurting = true;
+                        player.setTint(0x0000ff); // optional visual feedback
                     
-                        //player.anims.play('hurt', true); // play hurt animation once
-                        player.setTint(0xff0000); // optional visual feedback
-                    
-                        this.time.delayedCall(500, () => {
+                        this.time.delayedCall(100, () => {
                           player.clearTint();
                           player.isHurting = false;
                           //player.anims.play('idle', true); // return to idle or original anim
                         });
-                      }
+                    }
                       if(!player.flipX){
                         player.x += 0.2;
                       }else{
                         player.x -= 0.2;
                       }
-                      
                 });
-                let prevX = enemy.x;
-
-                this.tweens.add({
-                    targets: enemy,
-                    x: enemy.x - 1000, //enemy.x - 1000 <= change to  after testing
-                    ease: 'linear',
-                    duration: 8000,
-                    paused: false,
-                    repeat: -1,
-                    yoyo: true,
-                    onUpdate: () => {
-                    // Update physics body
-                        enemy.body.updateFromGameObject();
-                        // Flip sprite based on movement direction
-                        if (enemy.x < prevX) {
-                            enemy.flipX = false; // facing left
-                            enemy.body.setOffset(30, 7); // facing left position x & y hitbox
-                        } else if (enemy.x > prevX) {
-                            enemy.flipX = true; // facing right position x & y hitbox
-                            enemy.body.setOffset(0, 7);
-                        }
-                            prevX = enemy.x;
-                        }
-                }); 
-                 
+                this.physics.add.overlap(enemy, gameState.player.swordHitBox,(enemy, hitbox)=>{
+                    if(!enemy.isHurting){
+                        enemy.isHurting = true;
+                        enemy.setTint(0xff0000);
+                        this.time.delayedCall(100, () => {
+                            enemy.clearTint();
+                            enemy.isHurting = false;
+                        });
+                    }
+                    console.log('Enemy Hit!', enemy.x);
+                });
+                this.physics.add.overlap(enemy, gameState.player.spinHitBox,(enemy, hitbox)=>{
+                    if(!enemy.isHurting){
+                        enemy.isHurting = true;
+                        enemy.setTint(0xff0000);
+                        this.time.delayedCall(100, () => {
+                            enemy.clearTint();
+                            enemy.isHurting = false;
+                        });
+                    }
+                    console.log('Enemy Hit!', enemy.x);
+                });
             }, i * 5000);
         });
         
@@ -113,7 +107,6 @@ export default class MainScene extends Phaser.Scene{
        
         // function of different features
         this.createParallaxBackground();
-        this.createKeys(); 
         this.createSoundEffects(); // background music and sound effect
 
         //Cameras
@@ -126,10 +119,13 @@ export default class MainScene extends Phaser.Scene{
     }
 
     update(){  
-        gameState.enemyMushroom.getChildren().forEach(enemy => {
+        gameState.enemy.getChildren().forEach(enemy => {
             enemy.anims.play('enemy_walk', true);
         });
-        this.createMovement();
+
+        gameState.player.update(); // update player movement
+        gameState.player.hitboxOne();
+        gameState.player.hitboxTwo();
     }
     createMovement(){
         const cursors = gameState.cursors;
@@ -147,29 +143,25 @@ export default class MainScene extends Phaser.Scene{
         // LuneReaper Asset Load
         function luneReaperMovement(){
             if ((cursors.up.isDown || key.keyW.isDown) && player.body.blocked.down) {
-                player.setVelocityY(-430);
-                player.setScale(2.5);
+                player.setVelocityY(-400);
+               
             }else if (!key.keyX.isDown && !key.keyV.isDown && !key.keyC.isDown && player.body.velocity.y > 0 && !player.body.touching.down) {
                 player.anims.play('idle', true); // set to frame index 2 of the jump spritesheet
-                player.setScale(2.5);
             }else if(cursors.left.isDown || key.keyA.isDown){
                 player.setVelocityX(-250);
                 player.setFlipX(true);
                 player.anims.play('run', true);
                 console.log(player.x)// debugger
-                player.setScale(2.5);
         
             }else if(cursors.right.isDown || key.keyD.isDown){
                 player.setVelocityX(250);
                 player.anims.play('run', true);
                 player.setFlipX(false);
                 console.log(player.x) /// debugger
-                player.setScale(2.5);
         
             }else if(key.keyC.isDown){
                 console.log(player.anims.play('slash', true));
                 player.setVelocityX(0);
-                player.setScale(2.5);
             }else if(key.keyX.isDown){
                 console.log( player.anims.play('double_slash', true));
                     if(player.flipX){ // use flipX properties from player object and get boolean value
@@ -177,7 +169,6 @@ export default class MainScene extends Phaser.Scene{
                     }else{
                         player.setVelocityX(50);
                     }
-                    player.setScale(2.5);
             }else if(key.keyV.isDown){
                 console.log(player.anims.play('dash', true));
                     if(player.flipX){ // use flipX properties from player object and get boolean value
@@ -185,7 +176,6 @@ export default class MainScene extends Phaser.Scene{
                     }else{
                         player.x += 10;
                     }
-                    player.setScale(2.5);
             }else if(key.keySpace.isDown && player.body.blocked.down){
                 console.log(player.anims.play('special_skill', true));
                player.setScale(3);
@@ -193,83 +183,15 @@ export default class MainScene extends Phaser.Scene{
             }
             else{
                 player.setVelocityX(0);
-                player.setScale(2.5);
                 player.anims.play('idle', true);
             }
         }
-        
-        function luneBladeMovement(){
-        // Lune Blade Asset Load
-            if ((cursors.up.isDown || key.keyW.isDown) && player.body.blocked.down) {
-                player.setVelocityY(-550);
-                player.setScale(2.5);
-            }else if (!key.keyX.isDown && !key.keyV.isDown && !key.keyC.isDown && player.body.velocity.y > 0 && !player.body.touching.down) {
-                player.anims.play('fall', true); // set to frame index 2 of the jump spritesheet
-                player.setScale(2.5);
-            }else if(cursors.left.isDown || key.keyA.isDown){
-                player.setVelocityX(-240);
-                player.setFlipX(true);
-                player.anims.play('run', true);
-                console.log(player.x)// debugger
-                player.setScale(2.5);
-            }else if(cursors.right.isDown || key.keyD.isDown){
-                player.setVelocityX(240);
-                player.anims.play('run', true);
-                player.setFlipX(false);
-                console.log(player.x) /// debugger
-                player.setScale(2.5);
-            }else if(key.keyC.isDown){
-                console.log(player.anims.play('smash', true));
-                player.setVelocityX(0);
-                player.setScale(2.5);
-            }else if(key.keyX.isDown){
-                console.log( player.anims.play('spinAttack', true));
-                    if(player.flipX){ // use flipX properties from player object and get boolean value
-                        player.setVelocityX(-400);
-                    }else{
-                        player.setVelocityX(400);
-                    }
-                    player.setScale(2.5);
-            }else if(key.keyV.isDown){
-                console.log(player.anims.play('thrust', true));
-                    if(player.flipX){ // use flipX properties from player object and get boolean value
-                        player.setVelocityX(-100);
-                    }else{
-                        player.setVelocityX(100);
-                    }
-                    player.setScale(2.5);
-            }else if(key.keySpace.isDown && player.body.blocked.down){
-                console.log(player.anims.play('specialAttack', true));
-                player.setVelocityX(0);
-                player.setScale(2.5);            
-            }
-            else{
-                player.setVelocityX(0);
-                player.anims.play('idle', true);
-                player.setScale(2.5);
-            }
-
-        }
-
-        //luneReaperMovement(); // calling function for character movement
-        luneBladeMovement(); // calling function for character movement
     }
 
     createSoundEffects(){
         this.sound.add('grassy_biome', { loop: true, volume: 2}).play();//sounds
     }
     
-    createKeys(){ 
-        gameState.cursors = this.input.keyboard.createCursorKeys();
-        gameState.keyC = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
-        gameState.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-        gameState.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-        gameState.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
-        gameState.keyV = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.V);
-        gameState.keyX = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
-        gameState.keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-
-    }
     createParallaxBackground(){
         gameState.clouds = this.add.image(0, gameState.height - 1450, 'clouds').setOrigin(0, 0).setDepth(1);
         gameState.mountain = this.add.image(0, gameState.height - 970, 'mountain').setOrigin(0, 0).setDepth(2);
