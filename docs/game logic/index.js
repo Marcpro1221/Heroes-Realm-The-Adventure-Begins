@@ -1,6 +1,5 @@
 import CharacterSelection from './CharacterSelection.js';
 import MainScene from './MainScene.js';
-import PlayerScene from './PlayerScene.js';
 import BootScene from './BootScene.js';
 
  window.gameState = {
@@ -13,7 +12,7 @@ const config = {
     width : 1136,
     height : 636,
     backgroundColor: 0x87CEEB,
-    scene : [BootScene, PlayerScene, CharacterSelection, MainScene],
+    scene : [BootScene, CharacterSelection, MainScene],
     physics : {
         default:'arcade',
         arcade:{
