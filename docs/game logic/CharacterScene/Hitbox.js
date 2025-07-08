@@ -1,6 +1,6 @@
 
 export default class Hitbox extends Phaser.GameObjects.Rectangle{
-    constructor(scene, x, y, width, height, fillColor = 0xff0000, fillAlpha = 0.2) {
+    constructor(scene, x, y, width, height, fillColor = 0xff0000, fillAlpha = 0) {
         super(scene, x, y, width, height, fillColor, fillAlpha);
         scene.add.existing(this);
         scene.physics.add.existing(this, true);

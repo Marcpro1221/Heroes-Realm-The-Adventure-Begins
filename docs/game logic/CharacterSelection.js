@@ -8,7 +8,7 @@ export default class CharacterSelection extends Phaser.Scene{
         this.load.audio('journey', 'Resources/Assets/Music-Sounds/The_Journey.mp3');
     }
     create(){
-        gameState.bgMusic = this.sound.add('journey', { loop: true, volume: 2});
+        gameState.bgMusic = this.sound.add('journey', { loop: true, volume: 0.7});
         gameState.bgMusic.play();
         this.add.text(430,380, 'Press Space to Start.....').setDepth(5);
         this.add.image(0, 0, 'menu').setOrigin(0).setDepth(0);

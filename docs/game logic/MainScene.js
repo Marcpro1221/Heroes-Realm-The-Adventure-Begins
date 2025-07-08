@@ -11,19 +11,25 @@ export default class MainScene extends Phaser.Scene{
         //Sprite.repearLoadAsset(this);
         Sprite.luneBladeLoadAsset(this);
         Sprite.enemySprites(this);
+        this.load.audio('thrustAttack', 'Resources/Assets/Music-Sounds/thrustAttack.mp3');
+        this.load.audio('smashAttack', 'Resources/Assets/Music-Sounds/smashAttack3.mp3');
+        this.load.audio('spinAttack', 'Resources/Assets/Music-Sounds/spinAttack.mp3');
+        this.load.audio('hitAttack', 'Resources/Assets/Music-Sounds/hitAttack.mp3');
     }
     create(){
         Sprite.enemyMovement(this);
         Sprite.luneBladeAnimateAsset(this);
         //Sprite.repearAnimateAsset(this);
-
+        
         gameState.platforms = this.physics.add.staticGroup();
         gameState.enemy = this.physics.add.group();
 
         gameState.portal = this.add.image((gameState.width / 2) - 950, gameState.height - 1100, 'portal').setDepth(11);
         this.add.text((gameState.width / 2) - 850, gameState.height - 1100, 'COMING SOON....');
 
-        const single_platform_position = [
+        this.fpsText = this.add.text(10, 10, '', { fontSize: '16px', fill: '#000000' }).setDepth(100).setScrollFactor(0);
+        
+        const single_platform_position = [ // NEED TO UPDATE TO MAKE platform organize
             {x: (gameState.width / 2) - 950, y: gameState.height - 950}, // platform position x & y
             {x: gameState.width - 550, y: gameState.height - 250}, 
             {x: gameState.width - 550, y: gameState.height - 930},
@@ -35,6 +41,7 @@ export default class MainScene extends Phaser.Scene{
                                {x: 2200, y: 1250},
                                {x: 2200, y: 1250},
                                {x: 2200, y: 1250},
+                               {x: 3000, y: 500},
                                {x: 3000, y: 500},
                                {x: 3000, y: 500},
                                {x: 3000, y: 500},
@@ -59,14 +66,13 @@ export default class MainScene extends Phaser.Scene{
                 gameState.enemy.add(enemy); // add enemy to the group
 
                 this.physics.add.collider(enemy,gameState.platforms); // collider for each enemy
-                this.physics.add.overlap(gameState.player, enemy, (player, enemy)=>{
+                this.physics.add.overlap(gameState.player, enemy, (player, enemy)=>{ // player body taken damge to enemy
                     console.log('Collided!');
                     if (!player.isHurting) { // custom flag to prevent repeat
                         player.isHurting = true;
-                        player.setTint(0x0000ff); // optional visual feedback
-                    
-                        this.time.delayedCall(100, () => {
-                          player.clearTint();
+                        // for now damage set to 0
+                        this.time.delayedCall(500, () => {
+                        player.showDamagePopup(player.x, player.y, 0)
                           player.isHurting = false;
                           //player.anims.play('idle', true); // return to idle or original anim
                         });
@@ -81,9 +87,11 @@ export default class MainScene extends Phaser.Scene{
                     if(!enemy.isHurting){
                         enemy.isHurting = true;
                         enemy.setTint(0xff0000);
-                        this.time.delayedCall(100, () => {
+                        this.time.delayedCall(300, () => {
                             enemy.clearTint();
+                            enemy.showDamagePopup(enemy.x+40, enemy.y+40, 0); // show damage popup 0 for now
                             enemy.isHurting = false;
+                            this.sound.play('hitAttack', {loop:false, volume: 0.7});
                         });
                     }
                     console.log('Enemy Hit!', enemy.x);
@@ -92,9 +100,24 @@ export default class MainScene extends Phaser.Scene{
                     if(!enemy.isHurting){
                         enemy.isHurting = true;
                         enemy.setTint(0xff0000);
+                        this.time.delayedCall(50, () => {
+                            enemy.clearTint();
+                            enemy.showDamagePopup(enemy.x+40, enemy.y+40, 0);
+                            enemy.isHurting = false;
+                            this.sound.play('hitAttack', { volume: 0.7});
+                        });
+                    }
+                    console.log('Enemy Hit!', enemy.x);
+                });
+                this.physics.add.overlap(enemy, gameState.player.thrustAttackHitBox,(enemy, hitbox)=>{
+                    if(!enemy.isHurting){
+                        enemy.isHurting = true;
+                        enemy.setTint(0xff0000);
                         this.time.delayedCall(100, () => {
                             enemy.clearTint();
+                            enemy.showDamagePopup(enemy.x+40, enemy.y+40, 0);
                             enemy.isHurting = false;
+                            this.sound.play('hitAttack', { volume: 0.7});
                         });
                     }
                     console.log('Enemy Hit!', enemy.x);
@@ -103,7 +126,7 @@ export default class MainScene extends Phaser.Scene{
         });
         
         // moving the 6th platform
-        this.characterTweensY(gameState.platforms.getChildren()[6], gameState.height - 830, 3000, false, -1, true, gameState.platforms.getChildren()[6].body);
+        this.characterTweensY(gameState.platforms.getChildren()[6], gameState.height - 850, 3000, false, -1, true, gameState.platforms.getChildren()[6].body);
        
         // function of different features
         this.createParallaxBackground();
@@ -123,9 +146,13 @@ export default class MainScene extends Phaser.Scene{
             enemy.anims.play('enemy_walk', true);
         });
 
+        this.fpsText.setText(`FPS: ${Math.floor(this.game.loop.actualFps)}`); // display FPS
+        console.log(`FPS: ${Math.floor(this.game.loop.actualFps)}`);
+        console.log(this.fpsText); // log FPS to console
         gameState.player.update(); // update player movement
         gameState.player.hitboxOne();
         gameState.player.hitboxTwo();
+        gameState.player.hitboxThree();
     }
     createMovement(){
         const cursors = gameState.cursors;
@@ -189,7 +216,7 @@ export default class MainScene extends Phaser.Scene{
     }
 
     createSoundEffects(){
-        this.sound.add('grassy_biome', { loop: true, volume: 2}).play();//sounds
+        this.sound.add('grassy_biome', { loop: true, volume: 1}).play();//sounds
     }
     
     createParallaxBackground(){
@@ -232,6 +259,8 @@ export default class MainScene extends Phaser.Scene{
               }
         });
     }
+
+      
 }   
 
 
