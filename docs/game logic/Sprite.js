@@ -200,6 +200,9 @@ export default class Sprite{
             repeat: -1
         });
     }
+    static bladedStaffLoadAsset(loadAsset){
+        
+    }
     static enemySprites(loadAsset){
         loadAsset.load.spritesheet('enemy_walk', 'Resources/Assets/Huge_mushroom/HugeMushroom_walk.png',{
             frameWidth : 72,
@@ -209,6 +212,10 @@ export default class Sprite{
             frameWidth : 72,
             frameHeight : 72
         });
+        loadAsset.load.spritesheet('enemy_attack', 'Resources/Assets/Huge_mushroom/HugeMushroom_attack4.png',{
+            frameWidth : 72,
+            frameHeight : 72
+        })
     }
     static enemyMovement(loadAsset){
         loadAsset.anims.create({ // Run Animation sprite
@@ -223,6 +230,13 @@ export default class Sprite{
             frameRate: 10,
             repeat: -1
         });
+        loadAsset.anims.create({ // Run Animation sprite
+            key: 'enemy_attack',
+            frames : loadAsset.anims.generateFrameNumbers('enemy_attack',{start: 0, end: 3}),
+            frameRate: 10,
+            repeat: -1
+        });
+        
     }
     static backgroundSprite(loadAsset){
         loadAsset.load.image('ruins', 'Resources/Assets/Images/ruins.png');

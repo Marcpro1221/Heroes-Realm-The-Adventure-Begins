@@ -7,6 +7,7 @@ export default class Character extends Phaser.Physics.Arcade.Sprite {
         scene.physics.add.existing(this);
     }
     takenDamage(damage) {
+      this.showDamagePopup(this.x, this.y, damage);
     }
     showDamagePopup(x, y, damage) {
         const damageText = this.scene.add.text(x, y, damage.toString(), {

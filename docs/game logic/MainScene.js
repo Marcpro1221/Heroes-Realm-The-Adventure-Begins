@@ -11,10 +11,11 @@ export default class MainScene extends Phaser.Scene{
         //Sprite.repearLoadAsset(this);
         Sprite.luneBladeLoadAsset(this);
         Sprite.enemySprites(this);
-        this.load.audio('thrustAttack', 'Resources/Assets/Music-Sounds/thrustAttack.mp3');
+        this.load.audio('thrustAttack', 'Resources/Assets/Music-Sounds/ThrustAttack.mp3');
         this.load.audio('smashAttack', 'Resources/Assets/Music-Sounds/smashAttack3.mp3');
         this.load.audio('spinAttack', 'Resources/Assets/Music-Sounds/spinAttack.mp3');
         this.load.audio('hitAttack', 'Resources/Assets/Music-Sounds/hitAttack.mp3');
+
     }
     create(){
         Sprite.enemyMovement(this);
@@ -41,13 +42,12 @@ export default class MainScene extends Phaser.Scene{
                                {x: 2200, y: 1250},
                                {x: 2200, y: 1250},
                                {x: 2200, y: 1250},
-                               {x: 3000, y: 500},
-                               {x: 3000, y: 500},
-                               {x: 3000, y: 500},
-                               {x: 3000, y: 500},
+                               {x: 2200, y: 1250},
+                               {x: 2200, y: 1250},
+                               {x: 2200, y: 1250},
+                               {x: 2200, y: 1250},
                             ];
-                   
-
+                                     
         gameState.player = new Player(this, 250, 1250, 'idle');
 
          //for all platform type
@@ -74,7 +74,7 @@ export default class MainScene extends Phaser.Scene{
                         this.time.delayedCall(500, () => {
                         player.showDamagePopup(player.x, player.y, 0)
                           player.isHurting = false;
-                          //player.anims.play('idle', true); // return to idle or original anim
+                          
                         });
                     }
                       if(!player.flipX){
@@ -122,7 +122,10 @@ export default class MainScene extends Phaser.Scene{
                     }
                     console.log('Enemy Hit!', enemy.x);
                 });
-            }, i * 5000);
+                this.physics.add.overlap(enemy.detectionZone, gameState.player, (enemyDetectionZone, player) => {
+                    console.log('Player detected by enemy detection zone!');
+                });
+            }, i * 20000);
         });
         
         // moving the 6th platform
@@ -144,6 +147,8 @@ export default class MainScene extends Phaser.Scene{
     update(){  
         gameState.enemy.getChildren().forEach(enemy => {
             enemy.anims.play('enemy_walk', true);
+            enemy.detectionZoneArea(); // enemy detection zone
+            enemy.updateOnPlayerDetection(gameState.player); // update enemy detection zone on player
         });
 
         this.fpsText.setText(`FPS: ${Math.floor(this.game.loop.actualFps)}`); // display FPS
@@ -154,7 +159,7 @@ export default class MainScene extends Phaser.Scene{
         gameState.player.hitboxTwo();
         gameState.player.hitboxThree();
     }
-    createMovement(){
+    createMovement(){ // TO BE REMOVE AFTER UPDATE
         const cursors = gameState.cursors;
         const player = gameState.player;
         const key = {
