@@ -212,7 +212,7 @@ export default class Sprite{
             frameWidth : 72,
             frameHeight : 72
         });
-        loadAsset.load.spritesheet('enemy_attack', 'Resources/Assets/Huge_mushroom/HugeMushroom_attack4.png',{
+        loadAsset.load.spritesheet('enemy_attack', 'Resources/Assets/Huge_mushroom/HugeMushroom_attack1.png',{
             frameWidth : 72,
             frameHeight : 72
         })

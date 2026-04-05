@@ -8,29 +8,70 @@ export default class Enemy extends Character {
         this.setDepth(10);
         this.setScrollFactor(1);
         this.enemyLastPosition = this.x / 2; // store patrol target
+        this.patrolStartX = this.x;
+        this.patrolEndX = this.enemyLastPosition;
         this.prevX = this.x; // store initial previous X
+        this.patrolSpeed = 55 * 1.01;
+        this.patrolDirection = this.patrolEndX < this.patrolStartX ? -1 : 1;
+        this.knockbackVelocityX = 0;
+        this.knockbackDamping = 0.84;
+        this.knockbackFacingLock = null;
+        this.knockbackFacingThreshold = 6;
         this.detectionZone = new Hitbox(this.scene, this.x, this.y, 120, 100);
         this.enemyHitBox = new Hitbox(this.scene, this.x, this.y, 65, 30);
-        this.patrol = this.scene.tweens.add({
-            targets: this,
-            x: this.enemyLastPosition,
-            duration: 8000,
-            paused: false,
-            repeat: -1,
-            yoyo: true,
-            onUpdate: () => {
-                this.body.updateFromGameObject();
+    }
+    updateMovement(){
+        const patrolMinX = Math.min(this.patrolStartX, this.patrolEndX);
+        const patrolMaxX = Math.max(this.patrolStartX, this.patrolEndX);
 
-                if (this.x < this.prevX) {
-                    this.flipX = false;
-                    this.body.setOffset(30, 7);
-                } else if (this.x > this.prevX) {
-                    this.flipX = true;
-                    this.body.setOffset(0, 7);
-                }
-                this.prevX = this.x; // update previous X for next frame
+        if (this.x <= patrolMinX) {
+            this.x = patrolMinX;
+            this.patrolDirection = 1;
+        } else if (this.x >= patrolMaxX) {
+            this.x = patrolMaxX;
+            this.patrolDirection = -1;
+        }
+
+        const patrolVelocityX = this.patrolSpeed * this.patrolDirection;
+        this.setVelocityX(patrolVelocityX + this.knockbackVelocityX);
+
+        if (Math.abs(this.knockbackVelocityX) < 6) {
+            this.knockbackVelocityX = 0;
+        } else {
+            this.knockbackVelocityX *= this.knockbackDamping;
+        }
+
+        if (Math.abs(this.knockbackVelocityX) >= this.knockbackFacingThreshold && this.knockbackFacingLock !== null) {
+            this.applyFacing(this.knockbackFacingLock);
+        } else {
+            this.knockbackFacingLock = null;
+
+            if (this.body.velocity.x < 0) {
+                this.applyFacing(false);
+            } else if (this.body.velocity.x > 0) {
+                this.applyFacing(true);
             }
-        });
+        }
+
+        this.prevX = this.x;
+    }
+    applyFacing(flipX){
+        this.flipX = flipX;
+
+        if (flipX) {
+            this.body.setOffset(0, 7);
+            return;
+        }
+
+        this.body.setOffset(30, 7);
+    }
+    applyKnockback(knockbackVelocityX, knockbackVelocityY){
+        this.knockbackVelocityX = knockbackVelocityX;
+        this.knockbackFacingLock = this.flipX;
+
+        if (typeof knockbackVelocityY === 'number') {
+            this.setVelocityY(knockbackVelocityY);
+        }
     }
     detectionZoneArea(){  
         if(this.flipX){
@@ -44,22 +85,10 @@ export default class Enemy extends Character {
 
         this.enemyHitBox.setDepth(10);
         this.detectionZone.setDepth(10);
-
-        /*
-        1. if the player within the detection zone, set tween to false,
-        and set animation to idle, 
-        2. if the player not within the detection zone, set tween to true,
-        and set animation to patrol.
-        3. if the player within the enemyHitBox, set animation to attack.
-        */
-
     }
     updateOnPlayerDetection(player){
         if (this.detectionZone.getBounds().contains(player.x, player.y)) {
-            // this.patrol.paused = true; // pause the patrol tween
             console.log('Player detected by enemy!');
-        }else{
-            this.patrol.paused = false; // resume the patrol tween
         }
     }
 }

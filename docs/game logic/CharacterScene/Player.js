@@ -9,6 +9,25 @@ export default class Player extends Character {
         this.setScale(2.2);
         this.setDepth(100);
         this.swordSwing = false;
+        this.attackAnimationHandlerBound = false;
+        this.playerName = 'Marc';
+        this.maxHp = 100;
+        this.currentHp = this.maxHp;
+        this.maxMana = 100;
+        this.currentMana = this.maxMana;
+        this.level = 1;
+        this.currentExp = 0;
+        this.expToNextLevel = 500;
+        this.availableAttackUpgradePoints = 0;
+        this.attackUpgradeLevels = {
+            smash: 0,
+            spinAttack: 0,
+            thrust: 0
+        };
+        this.defenseUpgradeLevel = 0;
+        this.defensePercentPerLevel = 0.01;
+        this.isDead = false;
+        this.isHurting = false;
         this.cursors = scene.input.keyboard.createCursorKeys();
         const customKeys = ['C', 'W', 'A', 'D', 'V', 'X', 'SPACE'];
         customKeys.forEach(key => {
@@ -18,10 +37,55 @@ export default class Player extends Character {
         this.swordHitBox = new Hitbox(scene, this.x, this.y, 65, 40);
         this.spinHitBox = new Hitbox(scene, this.x, this.y, 145, 40);
         this.thrustAttackHitBox = new Hitbox(scene, this.x, this.y, 95, 25);
+        this.bindAttackAnimationHandlers();
+    }
+    enableProfileInteraction() {
+        const hitArea = new Phaser.Geom.Rectangle(
+            this.body.offset.x,
+            this.body.offset.y,
+            this.body.width,
+            this.body.height
+        );
+
+        this.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
+    }
+    getDefensePercent() {
+        return this.defenseUpgradeLevel * this.defensePercentPerLevel;
+    }
+    getDefenseValue() {
+        return Math.round(this.maxHp * this.getDefensePercent());
+    }
+    // Attack animation listener: reset combat state once per finished attack animation.
+    bindAttackAnimationHandlers(){
+        if (this.attackAnimationHandlerBound) {
+            return;
+        }
+
+        this.on('animationcomplete', (animation) => {
+            const attackAnimations = ['smash', 'thrust', 'spinAttack', 'specialAttack'];
+
+            if (!attackAnimations.includes(animation.key)) {
+                return;
+            }
+
+            this.swordSwing = false;
+            this.swordHitBox.body.enable = false;
+            this.spinHitBox.body.enable = false;
+            this.thrustAttackHitBox.body.enable = false;
+            this.anims.play('idle', true);
+            console.log('sword swing complete');
+        });
+
+        this.attackAnimationHandlerBound = true;
     }
     update(){
+        if (this.isDead) {
+            this.setVelocityX(0);
+            return;
+        }
+
         let movingX = false;
-        let speed = 240;
+        let speed = 200;
         this.isOverLap = false;
 
         if(!this.swordSwing){
@@ -67,18 +131,13 @@ export default class Player extends Character {
             }
         }
 
-        if(this.anims.currentAnim.key === 'spinAttack'){
+        if(this.anims.currentAnim?.key === 'spinAttack'){
             if(this.flipX){
                 this.setVelocityX(-speed - 100);
             }else{
                 this.setVelocityX(speed + 100);
             }
         }
-        this.once('animationcomplete', () => {
-            this.anims.play('idle', true);
-            this.swordSwing = false;
-            console.log('sword swing complete');
-        });
 
 
         //console.log(this.anims.currentAnim.key, this.anims.currentFrame.index);
@@ -88,46 +147,44 @@ export default class Player extends Character {
 
         this.flipX ? this.swordHitBox.follow(this, -45, 0) : this.swordHitBox.follow(this, 45, 0); 
 
-        if(this.anims.currentAnim.key === 'smash' && this.anims.currentFrame.index === 11){
+        if(this.anims.currentAnim?.key === 'smash' && this.anims.currentFrame?.index === 11){
             this.swordHitBox.body.enable = true; // enable hitbox on frame index 11
             if (!this.thrustSoundPlayed) {
                 this.scene.sound.play('smashAttack', { volume: 1.5 });
                 this.thrustSoundPlayed = true;
             }
-        }else if(this.anims.currentAnim.key === 'smash' && this.anims.currentFrame.index === 14){
+        }else if(this.anims.currentAnim?.key === 'smash' && this.anims.currentFrame?.index === 14){
             this.swordHitBox.body.enable = false; // disable hitbox on frame index 15
             this.thrustSoundPlayed = false;
         }
-        console.log('Player', this.anims.currentAnim.key, this.swordHitBox.body.enable)
    
     }
     hitboxTwo(){
         this.spinHitBox.setVisible(false);
         this.flipX ? this.spinHitBox.follow(this, -7, 0) : this.spinHitBox.follow(this, 7, 0); 
         
-        if(this.anims.currentAnim.key === 'spinAttack' && this.anims.currentFrame.index === 1){
+        if(this.anims.currentAnim?.key === 'spinAttack' && this.anims.currentFrame?.index === 1){
             this.spinHitBox.body.enable = true; // enable hitbox on frame index 11
             if (!this.thrustSoundPlayed) {
                 this.scene.sound.play('spinAttack', { volume: 1.5 });
                 this.thrustSoundPlayed = true;
             }
-        }else if(this.anims.currentAnim.key === 'spinAttack' && this.anims.currentFrame.index === 4){
+        }else if(this.anims.currentAnim?.key === 'spinAttack' && this.anims.currentFrame?.index === 4){
             this.spinHitBox.body.enable = false; // disable hitbox on frame index 15
             this.thrustSoundPlayed = false;
         }
-        console.log('Player', this.anims.currentAnim.key, this.spinHitBox.body.enable);
     }
     hitboxThree(){
-        this.spinHitBox.setVisible(false);
+        this.thrustAttackHitBox.setVisible(false);
         this.flipX ? this.thrustAttackHitBox.follow(this, -35, 2) : this.thrustAttackHitBox.follow(this, 35, 2);
 
-        if(this.anims.currentAnim.key === 'thrust' && this.anims.currentFrame.index === 1){
+        if(this.anims.currentAnim?.key === 'thrust' && this.anims.currentFrame?.index === 1){
             this.thrustAttackHitBox.body.enable = true; // enable hitbox on frame index 11
             if (!this.thrustSoundPlayed) {
                 this.scene.sound.play('thrustAttack', { volume: 1.5 });
                 this.thrustSoundPlayed = true;
             }
-        }else if(this.anims.currentAnim.key === 'thrust' && this.anims.currentFrame.index === 2){
+        }else if(this.anims.currentAnim?.key === 'thrust' && this.anims.currentFrame?.index === 2){
             this.thrustAttackHitBox.body.enable = false; // disable hitbox on frame index 15
             this.thrustSoundPlayed = false;
         }

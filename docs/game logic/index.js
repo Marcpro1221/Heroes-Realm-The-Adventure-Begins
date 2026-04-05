@@ -11,13 +11,14 @@ const config = {
     type : Phaser.AUTO,
     width : 1136,
     height : 636,
+    pixelArt: true,
     backgroundColor: 0x87CEEB,
     scene : [BootScene, CharacterSelection, MainScene],
     physics : {
         default:'arcade',
         arcade:{
             gravity:{y:800},
-            debug:false
+            debug:true
         }
     },
 }

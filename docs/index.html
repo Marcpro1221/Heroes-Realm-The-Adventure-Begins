@@ -4,10 +4,28 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Heroes Realm: The Adventure Begins</title>
-  <link rel="stylesheet" href="./Resources/style.css" />
+  <link rel="stylesheet" href="./style.css" />
   <link rel="icon" type="image/png" href="icon.png">
 </head>
 <body>
+    <main class="device-warning" aria-live="polite">
+      <div class="device-warning__backdrop"></div>
+      <section class="device-warning__card">
+        <p class="device-warning__eyebrow">Heroes Realm</p>
+        <h1>PC version only</h1>
+        <p class="device-warning__text">
+          This game currently uses keyboard controls and is not available on phones or tablets.
+        </p>
+        <p class="device-warning__text">
+          Please open it on a desktop or laptop browser for the full experience.
+        </p>
+        <div class="device-warning__chips">
+          <span>Android not supported</span>
+          <span>Tablet not supported</span>
+          <span>Keyboard required</span>
+        </div>
+      </section>
+    </main>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.86.0/phaser.min.js"></script>
     <script type="module" src="./game logic/index.js"></script>
     <script type="module" src="./game logic/Sprite.js"></script>
