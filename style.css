@@ -14,7 +14,7 @@
 html {
     min-height: 100%;
     width: 100%;
-    background-image: url('./Resources/Assets/Images/background.png');
+    background-image: url('./docs/Resources/Assets/Images/background.png');
     background-position: center;
     background-repeat: no-repeat;
     background-size: cover;

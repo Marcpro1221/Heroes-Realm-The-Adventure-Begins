@@ -1,5 +1,3 @@
-import Sprite from "./Sprite.js";
-import Player from './CharacterScene/Player.js';
 export default class CharacterSelection extends Phaser.Scene{
     constructor(){
         super('CharacterSelectionScene');
@@ -61,9 +59,8 @@ export default class CharacterSelection extends Phaser.Scene{
     update(){
         if(this.spaceKey.isDown){
             this.scene.stop('CharacterSelectionScene');
-            this.scene.launch('PlayerScene');
             this.scene.start('MainGameScene');
-            console.log(gameState.bgMusic.stop());
+            gameState.bgMusic?.stop();
         }
     }
 }

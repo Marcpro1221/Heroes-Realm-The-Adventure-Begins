@@ -87,8 +87,6 @@ export default class Enemy extends Character {
         this.detectionZone.setDepth(10);
     }
     updateOnPlayerDetection(player){
-        if (this.detectionZone.getBounds().contains(player.x, player.y)) {
-            console.log('Player detected by enemy!');
-        }
+        return this.detectionZone.getBounds().contains(player.x, player.y);
     }
 }

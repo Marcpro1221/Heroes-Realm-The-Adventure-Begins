@@ -73,7 +73,6 @@ export default class Player extends Character {
             this.spinHitBox.body.enable = false;
             this.thrustAttackHitBox.body.enable = false;
             this.anims.play('idle', true);
-            console.log('sword swing complete');
         });
 
         this.attackAnimationHandlerBound = true;

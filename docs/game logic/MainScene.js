@@ -183,9 +183,6 @@ export default class MainScene extends Phaser.Scene{
         this.physics.add.overlap(enemy, gameState.player.swordHitBox, () => this.damageEnemy(enemy, 'smash'), null, this);
         this.physics.add.overlap(enemy, gameState.player.spinHitBox, () => this.damageEnemy(enemy, 'spinAttack'), null, this);
         this.physics.add.overlap(enemy, gameState.player.thrustAttackHitBox, () => this.damageEnemy(enemy, 'thrust'), null, this);
-        this.physics.add.overlap(enemy.detectionZone, gameState.player, () => {
-            console.log('Player detected by enemy detection zone!');
-        });
     }
 
     // Player contact damage: apply touch damage when the enemy body overlaps the player.
@@ -818,33 +815,31 @@ export default class MainScene extends Phaser.Scene{
                 player.setVelocityX(-250);
                 player.setFlipX(true);
                 player.anims.play('run', true);
-                console.log(player.x)// debugger
         
             }else if(cursors.right.isDown || key.keyD.isDown){
                 player.setVelocityX(250);
                 player.anims.play('run', true);
                 player.setFlipX(false);
-                console.log(player.x) /// debugger
         
             }else if(key.keyC.isDown){
-                console.log(player.anims.play('slash', true));
+                player.anims.play('slash', true);
                 player.setVelocityX(0);
             }else if(key.keyX.isDown){
-                console.log( player.anims.play('double_slash', true));
+                player.anims.play('double_slash', true);
                     if(player.flipX){ // use flipX properties from player object and get boolean value
                         player.setVelocityX(-50);
                     }else{
                         player.setVelocityX(50);
                     }
             }else if(key.keyV.isDown){
-                console.log(player.anims.play('dash', true));
+                player.anims.play('dash', true);
                     if(player.flipX){ // use flipX properties from player object and get boolean value
                         player.x -= 10;
                     }else{
                         player.x += 10;
                     }
             }else if(key.keySpace.isDown && player.body.blocked.down){
-                console.log(player.anims.play('special_skill', true));
+                player.anims.play('special_skill', true);
                player.setScale(3);
                 player.setVelocityX(0);
             }
