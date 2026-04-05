@@ -23,9 +23,9 @@ export default class MainScene extends Phaser.Scene{
         this.enemyKnockbackJumpVelocity = -180;
         // Attack balance settings: adjust percent and hit interval here for each player attack key.
         this.playerAttackConfig = {
-            smash: { keyLabel: 'C', label: 'Smash', damagePercent: 0.35, hitCooldownMs: 450, tintDurationMs: 180 },
-            spinAttack: { keyLabel: 'X', label: 'Spin Attack', damagePercent: 0.08, hitCooldownMs: 90, tintDurationMs: 70 },
-            thrust: { keyLabel: 'V', label: 'Thrust', damagePercent: 0.18, hitCooldownMs: 180, tintDurationMs: 100 }
+            smash: { keyLabel: 'C', label: 'Rift Cleave', damagePercent: 0.35, hitCooldownMs: 450, tintDurationMs: 180 },
+            spinAttack: { keyLabel: 'X', label: 'Abyss Sweep', damagePercent: 0.08, hitCooldownMs: 90, tintDurationMs: 70 },
+            thrust: { keyLabel: 'V', label: 'Void Burst', damagePercent: 0.18, hitCooldownMs: 180, tintDurationMs: 100 }
         };
     }
     preload(){
@@ -232,6 +232,7 @@ export default class MainScene extends Phaser.Scene{
         enemy.lastTintAt = currentTime;
         enemy.isHurting = true;
         enemy.currentHp = Math.max(0, enemy.currentHp - damage);
+        this.updateEnemyDirectionOnHit(enemy, gameState.player);
         this.applyEnemyKnockback(enemy, gameState.player);
         enemy.setTint(0xff0000);
         enemy.showDamagePopup(enemy.x + 40, enemy.y + 40, damage);
@@ -255,6 +256,30 @@ export default class MainScene extends Phaser.Scene{
             enemy.clearTint();
             enemy.isHurting = false;
         });
+    }
+
+    updateEnemyDirectionOnHit(enemy, player){
+        if (!enemy?.body || !player) {
+            return;
+        }
+
+        const currentDirection = Math.sign(enemy.body.velocity.x) || enemy.patrolDirection || 1;
+        const playerReferenceX = player.body ? player.body.center.x : player.x;
+        const enemyReferenceX = enemy.body ? enemy.body.center.x : enemy.x;
+        let playerRelativeDirection = Math.sign(playerReferenceX - enemyReferenceX);
+
+        if (playerRelativeDirection === 0) {
+            playerRelativeDirection = currentDirection;
+        }
+
+        const wasHitFromBehind = playerRelativeDirection !== currentDirection;
+        if (!wasHitFromBehind) {
+            return;
+        }
+
+        enemy.patrolDirection = playerRelativeDirection;
+        enemy.applyFacing(playerRelativeDirection > 0);
+        enemy.knockbackFacingLock = enemy.flipX;
     }
 
     applyEnemyKnockback(enemy, player){
@@ -346,10 +371,14 @@ export default class MainScene extends Phaser.Scene{
         const hudY = 18;
         const barWidth = 150;
         const barHeight = 14;
+        const abyssBlue = 0x08111f;
+        const abyssBlueRaised = 0x10233c;
+        const abyssLine = 0x1f4f75;
+        const abyssGlow = 0x4bc3ff;
         const labelStyle = {
             fontFamily: 'Arial',
             fontSize: '14px',
-            color: '#d7e3ea'
+            color: '#b7d8f3'
         };
 
         this.playerHud = {
@@ -360,52 +389,57 @@ export default class MainScene extends Phaser.Scene{
             displayedHpRatio: 1,
             displayedExpRatio: 0,
             displayedManaRatio: 1,
-            panel: this.add.rectangle(hudX, hudY, 238, 132, 0x0f1720, 0.92).setOrigin(0, 0),
-            headerButton: this.add.rectangle(hudX, hudY, 238, 32, 0x15202b, 0.8).setOrigin(0, 0),
+            panelShadow: this.add.rectangle(hudX + 4, hudY + 6, 238, 132, 0x02050b, 0.45).setOrigin(0, 0),
+            panel: this.add.rectangle(hudX, hudY, 238, 132, abyssBlue, 0.94).setOrigin(0, 0),
+            panelBorder: this.add.rectangle(hudX, hudY, 238, 132).setOrigin(0, 0).setStrokeStyle(2, abyssLine, 0.85),
+            headerButton: this.add.rectangle(hudX, hudY, 238, 32, abyssBlueRaised, 0.92).setOrigin(0, 0),
+            headerGlow: this.add.rectangle(hudX + 1, hudY + 1, 236, 4, abyssGlow, 0.18).setOrigin(0, 0),
+            dividerOne: this.add.rectangle(hudX + 12, hudY + 59, 214, 1, abyssLine, 0.55).setOrigin(0, 0.5),
+            dividerTwo: this.add.rectangle(hudX + 12, hudY + 87, 214, 1, abyssLine, 0.55).setOrigin(0, 0.5),
             nameText: this.add.text(hudX + 16, hudY + 10, '', {
                 fontFamily: 'Arial',
                 fontSize: '20px',
-                color: '#ffffff',
+                color: '#e7f6ff',
                 fontStyle: 'bold'
             }),
             profileHintText: this.add.text(hudX + 160, hudY + 11, 'Click for profile', {
                 fontFamily: 'Arial',
                 fontSize: '11px',
-                color: '#9fb3c8'
+                color: '#77b7d9'
             }).setOrigin(1, 0),
-            levelBadge: this.add.rectangle(hudX + 206, hudY + 16, 24, 24, 0x1d4ed8, 1).setOrigin(0.5),
+            levelBadge: this.add.rectangle(hudX + 206, hudY + 16, 24, 24, 0x153d68, 1).setOrigin(0.5),
             levelText: this.add.text(hudX + 206, hudY + 9, '', {
                 fontFamily: 'Arial',
                 fontSize: '12px',
-                color: '#ffffff',
+                color: '#f4fbff',
                 fontStyle: 'bold'
             }).setOrigin(0.5, 0),
             hpLabel: this.add.text(hudX + 16, hudY + 42, 'HP', labelStyle),
             expLabel: this.add.text(hudX + 16, hudY + 70, 'EXP', labelStyle),
             manaLabel: this.add.text(hudX + 16, hudY + 98, 'Mana', labelStyle),
-            hpBarBg: this.add.rectangle(hudX + 72, hudY + 50, barWidth, barHeight, 0x1f2933).setOrigin(0, 0.5),
+            hpBarBg: this.add.rectangle(hudX + 72, hudY + 50, barWidth, barHeight, 0x071522).setOrigin(0, 0.5),
             hpBarFill: this.add.rectangle(hudX + 72, hudY + 50, barWidth, barHeight, 0x22c55e).setOrigin(0, 0.5),
             hpBarGlow: this.add.rectangle(hudX + 72, hudY + 50, barWidth, 4, 0x86efac, 0.35).setOrigin(0, 0.5),
             hpValueText: this.add.text(hudX + 72 + barWidth - 8, hudY + 39, '', {
                 fontFamily: 'Arial',
                 fontSize: '13px',
-                color: '#f8fafc'
+                color: '#e8f3fb'
             }).setOrigin(1, 0),
-            expBarBg: this.add.rectangle(hudX + 72, hudY + 78, barWidth, barHeight, 0x1f2933).setOrigin(0, 0.5),
+            expBarBg: this.add.rectangle(hudX + 72, hudY + 78, barWidth, barHeight, 0x071522).setOrigin(0, 0.5),
             expBarFill: this.add.rectangle(hudX + 72, hudY + 78, 0, barHeight, 0xf59e0b).setOrigin(0, 0.5),
             expBarGlow: this.add.rectangle(hudX + 72, hudY + 78, 0, 4, 0xfcd34d, 0.35).setOrigin(0, 0.5),
             expValueText: this.add.text(hudX + 72 + barWidth - 8, hudY + 67, '', {
                 fontFamily: 'Arial',
                 fontSize: '13px',
-                color: '#f8fafc'
+                color: '#e8f3fb'
             }).setOrigin(1, 0),
-            manaBarBg: this.add.rectangle(hudX + 72, hudY + 106, barWidth, barHeight, 0x1f2933).setOrigin(0, 0.5),
+            manaBarBg: this.add.rectangle(hudX + 72, hudY + 106, barWidth, barHeight, 0x071522).setOrigin(0, 0.5),
             manaBarFill: this.add.rectangle(hudX + 72, hudY + 106, barWidth, barHeight, 0x3b82f6).setOrigin(0, 0.5),
             manaBarGlow: this.add.rectangle(hudX + 72, hudY + 106, barWidth, 4, 0x93c5fd, 0.35).setOrigin(0, 0.5),
             manaValueText: this.add.text(hudX + 72 + barWidth - 8, hudY + 95, '', {
                 fontFamily: 'Arial',
                 fontSize: '13px',
-                color: '#f8fafc'
+                color: '#e8f3fb'
             }).setOrigin(1, 0)
         };
 
@@ -421,8 +455,8 @@ export default class MainScene extends Phaser.Scene{
         this.fpsText = this.add.text(config.width - 16, 14, '', {
             fontFamily: 'Arial',
             fontSize: '16px',
-            color: '#ffffff',
-            backgroundColor: '#0f1720',
+            color: '#dff6ff',
+            backgroundColor: '#08111f',
             padding: { x: 8, y: 4 }
         }).setOrigin(1, 0).setDepth(210).setScrollFactor(0);
 
@@ -430,9 +464,80 @@ export default class MainScene extends Phaser.Scene{
         this.playerHud.headerButton.on('pointerdown', () => {
             this.togglePlayerProfile();
         });
+        this.createAttackGuidePanel();
         this.createPlayerProfilePanel();
 
         this.updatePlayerHud();
+    }
+
+    createAttackGuidePanel(){
+        const panelX = 0;
+        const panelY = config.height - 110;
+        const panelWidth = 322;
+        const panelHeight = 110;
+        const panelElements = {
+            shadow: this.add.rectangle(panelX + 4, panelY + 6, panelWidth, panelHeight, 0x01040a, 0.32).setOrigin(0, 0),
+            panel: this.add.rectangle(panelX, panelY, panelWidth, panelHeight, 0x07111d, 0.52).setOrigin(0, 0),
+            border: this.add.rectangle(panelX, panelY, panelWidth, panelHeight).setOrigin(0, 0).setStrokeStyle(1, 0x3c7aa6, 0.58),
+            glow: this.add.rectangle(panelX + 1, panelY + 1, panelWidth - 2, 3, 0x71e3ff, 0.16).setOrigin(0, 0),
+            title: this.add.text(panelX + 16, panelY + 10, 'Combat Arts', {
+                fontFamily: 'Arial',
+                fontSize: '13px',
+                color: '#8fe8ff',
+                fontStyle: 'bold'
+            }),
+            divider: this.add.rectangle(panelX + 12, panelY + 30, panelWidth - 24, 1, 0x2a6288, 0.55).setOrigin(0, 0.5),
+            smashKey: this.add.text(panelX + 16, panelY + 40, `${this.playerAttackConfig.smash.keyLabel}`, {
+                fontFamily: 'Arial',
+                fontSize: '13px',
+                color: '#fff4c7',
+                fontStyle: 'bold',
+                backgroundColor: '#17324a',
+                padding: { x: 6, y: 2 }
+            }),
+            smashLabel: this.add.text(panelX + 52, panelY + 42, `${this.playerAttackConfig.smash.label}  |  Heavy`, {
+                fontFamily: 'Arial',
+                fontSize: '12px',
+                color: '#eff8ff'
+            }),
+            spinKey: this.add.text(panelX + 16, panelY + 65, `${this.playerAttackConfig.spinAttack.keyLabel}`, {
+                fontFamily: 'Arial',
+                fontSize: '13px',
+                color: '#fff4c7',
+                fontStyle: 'bold',
+                backgroundColor: '#17324a',
+                padding: { x: 6, y: 2 }
+            }),
+            spinLabel: this.add.text(panelX + 52, panelY + 67, `${this.playerAttackConfig.spinAttack.label}  |  Sweep`, {
+                fontFamily: 'Arial',
+                fontSize: '12px',
+                color: '#eff8ff'
+            }),
+            thrustKey: this.add.text(panelX + 16, panelY + 88, `${this.playerAttackConfig.thrust.keyLabel}`, {
+                fontFamily: 'Arial',
+                fontSize: '13px',
+                color: '#fff4c7',
+                fontStyle: 'bold',
+                backgroundColor: '#17324a',
+                padding: { x: 6, y: 2 }
+            }),
+            thrustLabel: this.add.text(panelX + 52, panelY + 90, `${this.playerAttackConfig.thrust.label}  |  Burst`, {
+                fontFamily: 'Arial',
+                fontSize: '12px',
+                color: '#eff8ff'
+            })
+        };
+
+        Object.values(panelElements).forEach(element => {
+            if (element?.setScrollFactor) {
+                element.setScrollFactor(0);
+            }
+            if (element?.setDepth) {
+                element.setDepth(198);
+            }
+        });
+
+        this.attackGuidePanel = panelElements;
     }
 
     updatePlayerHud(){
@@ -482,99 +587,130 @@ export default class MainScene extends Phaser.Scene{
     }
 
     createPlayerProfilePanel(){
-        const panelWidth = 340;
-        const panelHeight = 308;
+        const panelWidth = 364;
+        const panelHeight = 330;
         const panelX = (config.width / 2) - (panelWidth / 2);
         const panelY = (config.height / 2) - (panelHeight / 2);
+        const abyssPanel = 0x06111c;
+        const abyssRaised = 0x0d2238;
+        const abyssRow = 0x0a1a2d;
+        const abyssLine = 0x21547a;
         const profileElements = {
-            background: this.add.rectangle(panelX, panelY, panelWidth, panelHeight, 0x0b1220, 0.95).setOrigin(0, 0),
+            shadow: this.add.rectangle(panelX + 8, panelY + 10, panelWidth, panelHeight, 0x02050b, 0.52).setOrigin(0, 0),
+            background: this.add.rectangle(panelX, panelY, panelWidth, panelHeight, abyssPanel, 0.96).setOrigin(0, 0),
+            frame: this.add.rectangle(panelX, panelY, panelWidth, panelHeight).setOrigin(0, 0).setStrokeStyle(2, abyssLine, 0.92),
+            headerBand: this.add.rectangle(panelX + 1, panelY + 1, panelWidth - 2, 52, abyssRaised, 0.92).setOrigin(0, 0),
+            headerGlow: this.add.rectangle(panelX + 1, panelY + 1, panelWidth - 2, 4, 0x55d6ff, 0.2).setOrigin(0, 0),
             title: this.add.text(panelX + 16, panelY + 14, 'Player Profile', {
                 fontFamily: 'Arial',
                 fontSize: '18px',
-                color: '#ffffff',
+                color: '#effbff',
                 fontStyle: 'bold'
             }),
             subtitle: this.add.text(panelX + 16, panelY + 40, '', {
                 fontFamily: 'Arial',
                 fontSize: '13px',
-                color: '#9fb3c8'
+                color: '#7fb3d1'
             }),
-            hpStat: this.add.text(panelX + 16, panelY + 72, '', {
+            statsSectionLabel: this.add.text(panelX + 16, panelY + 64, 'Core Stats', {
                 fontFamily: 'Arial',
-                fontSize: '14px',
-                color: '#bbf7d0'
-            }),
-            manaStat: this.add.text(panelX + 16, panelY + 96, '', {
-                fontFamily: 'Arial',
-                fontSize: '14px',
-                color: '#bfdbfe'
-            }),
-            expStat: this.add.text(panelX + 16, panelY + 120, '', {
-                fontFamily: 'Arial',
-                fontSize: '14px',
-                color: '#fde68a'
-            }),
-            pointsStat: this.add.text(panelX + 16, panelY + 146, '', {
-                fontFamily: 'Arial',
-                fontSize: '13px',
-                color: '#93c5fd'
-            }),
-            defenseStat: this.add.text(panelX + 16, panelY + 172, '', {
-                fontFamily: 'Arial',
-                fontSize: '14px',
-                color: '#fca5a5'
-            }),
-            defenseUpgradeButton: this.add.text(panelX + 296, panelY + 168, '+', {
-                fontFamily: 'Arial',
-                fontSize: '20px',
-                color: '#22c55e',
-                fontStyle: 'bold',
-                backgroundColor: '#16351f',
-                padding: { x: 7, y: 0 }
-            }),
-            attackTitle: this.add.text(panelX + 16, panelY + 202, 'Attack Damage', {
-                fontFamily: 'Arial',
-                fontSize: '15px',
-                color: '#ffffff',
+                fontSize: '12px',
+                color: '#61d2ff',
                 fontStyle: 'bold'
             }),
-            smashDamage: this.add.text(panelX + 16, panelY + 228, '', {
+            hpRowBg: this.add.rectangle(panelX + 12, panelY + 82, panelWidth - 24, 22, abyssRow, 0.72).setOrigin(0, 0),
+            manaRowBg: this.add.rectangle(panelX + 12, panelY + 106, panelWidth - 24, 22, abyssRow, 0.56).setOrigin(0, 0),
+            expRowBg: this.add.rectangle(panelX + 12, panelY + 130, panelWidth - 24, 22, abyssRow, 0.72).setOrigin(0, 0),
+            pointsRowBg: this.add.rectangle(panelX + 12, panelY + 154, panelWidth - 24, 22, abyssRow, 0.56).setOrigin(0, 0),
+            defenseRowBg: this.add.rectangle(panelX + 12, panelY + 178, panelWidth - 24, 22, abyssRow, 0.72).setOrigin(0, 0),
+            rowDividerOne: this.add.rectangle(panelX + 12, panelY + 105, panelWidth - 24, 1, abyssLine, 0.55).setOrigin(0, 0.5),
+            rowDividerTwo: this.add.rectangle(panelX + 12, panelY + 129, panelWidth - 24, 1, abyssLine, 0.55).setOrigin(0, 0.5),
+            rowDividerThree: this.add.rectangle(panelX + 12, panelY + 153, panelWidth - 24, 1, abyssLine, 0.55).setOrigin(0, 0.5),
+            rowDividerFour: this.add.rectangle(panelX + 12, panelY + 177, panelWidth - 24, 1, abyssLine, 0.55).setOrigin(0, 0.5),
+            verticalDivider: this.add.rectangle(panelX + 317, panelY + 82, 1, 118, abyssLine, 0.7).setOrigin(0, 0),
+            hpStat: this.add.text(panelX + 20, panelY + 85, '', {
+                fontFamily: 'Arial',
+                fontSize: '14px',
+                color: '#cbffe0'
+            }),
+            manaStat: this.add.text(panelX + 20, panelY + 109, '', {
+                fontFamily: 'Arial',
+                fontSize: '14px',
+                color: '#cbe2ff'
+            }),
+            expStat: this.add.text(panelX + 20, panelY + 133, '', {
+                fontFamily: 'Arial',
+                fontSize: '14px',
+                color: '#ffe9a8'
+            }),
+            pointsStat: this.add.text(panelX + 20, panelY + 157, '', {
                 fontFamily: 'Arial',
                 fontSize: '13px',
-                color: '#f8fafc'
+                color: '#9fd8ff'
             }),
-            spinDamage: this.add.text(panelX + 16, panelY + 250, '', {
+            defenseStat: this.add.text(panelX + 20, panelY + 181, '', {
                 fontFamily: 'Arial',
-                fontSize: '13px',
-                color: '#f8fafc'
+                fontSize: '14px',
+                color: '#8ce4ff'
             }),
-            thrustDamage: this.add.text(panelX + 16, panelY + 272, '', {
-                fontFamily: 'Arial',
-                fontSize: '13px',
-                color: '#f8fafc'
-            }),
-            smashUpgradeButton: this.add.text(panelX + 296, panelY + 224, '+', {
+            defenseUpgradeButton: this.add.text(panelX + 328, panelY + 176, '+', {
                 fontFamily: 'Arial',
                 fontSize: '20px',
-                color: '#22c55e',
+                color: '#8af5ff',
                 fontStyle: 'bold',
-                backgroundColor: '#16351f',
+                backgroundColor: '#11314a',
                 padding: { x: 7, y: 0 }
             }),
-            spinUpgradeButton: this.add.text(panelX + 296, panelY + 246, '+', {
+            attackTitle: this.add.text(panelX + 16, panelY + 216, 'Attack Attributes', {
+                fontFamily: 'Arial',
+                fontSize: '15px',
+                color: '#effbff',
+                fontStyle: 'bold'
+            }),
+            attackSectionLine: this.add.rectangle(panelX + 16, panelY + 240, panelWidth - 32, 1, abyssLine, 0.72).setOrigin(0, 0.5),
+            smashRowBg: this.add.rectangle(panelX + 12, panelY + 250, panelWidth - 24, 22, abyssRow, 0.72).setOrigin(0, 0),
+            spinRowBg: this.add.rectangle(panelX + 12, panelY + 274, panelWidth - 24, 22, abyssRow, 0.56).setOrigin(0, 0),
+            thrustRowBg: this.add.rectangle(panelX + 12, panelY + 298, panelWidth - 24, 22, abyssRow, 0.72).setOrigin(0, 0),
+            attackDividerOne: this.add.rectangle(panelX + 12, panelY + 273, panelWidth - 24, 1, abyssLine, 0.55).setOrigin(0, 0.5),
+            attackDividerTwo: this.add.rectangle(panelX + 12, panelY + 297, panelWidth - 24, 1, abyssLine, 0.55).setOrigin(0, 0.5),
+            attackButtonDivider: this.add.rectangle(panelX + 317, panelY + 250, 1, 70, abyssLine, 0.7).setOrigin(0, 0),
+            smashDamage: this.add.text(panelX + 20, panelY + 253, '', {
+                fontFamily: 'Arial',
+                fontSize: '13px',
+                color: '#f1f9ff'
+            }),
+            spinDamage: this.add.text(panelX + 20, panelY + 277, '', {
+                fontFamily: 'Arial',
+                fontSize: '13px',
+                color: '#f1f9ff'
+            }),
+            thrustDamage: this.add.text(panelX + 20, panelY + 301, '', {
+                fontFamily: 'Arial',
+                fontSize: '13px',
+                color: '#f1f9ff'
+            }),
+            smashUpgradeButton: this.add.text(panelX + 328, panelY + 250, '+', {
                 fontFamily: 'Arial',
                 fontSize: '20px',
-                color: '#22c55e',
+                color: '#8af5ff',
                 fontStyle: 'bold',
-                backgroundColor: '#16351f',
+                backgroundColor: '#11314a',
                 padding: { x: 7, y: 0 }
             }),
-            thrustUpgradeButton: this.add.text(panelX + 296, panelY + 268, '+', {
+            spinUpgradeButton: this.add.text(panelX + 328, panelY + 274, '+', {
                 fontFamily: 'Arial',
                 fontSize: '20px',
-                color: '#22c55e',
+                color: '#8af5ff',
                 fontStyle: 'bold',
-                backgroundColor: '#16351f',
+                backgroundColor: '#11314a',
+                padding: { x: 7, y: 0 }
+            }),
+            thrustUpgradeButton: this.add.text(panelX + 328, panelY + 298, '+', {
+                fontFamily: 'Arial',
+                fontSize: '20px',
+                color: '#8af5ff',
+                fontStyle: 'bold',
+                backgroundColor: '#11314a',
                 padding: { x: 7, y: 0 }
             })
         };
@@ -710,27 +846,119 @@ export default class MainScene extends Phaser.Scene{
         player.availableAttackUpgradePoints += 1;
         player.currentHp = player.maxHp;
         player.currentMana = player.maxMana;
-
-        const levelUpText = this.add.text(player.x, player.y - 80, `LEVEL ${player.level}`, {
-            fontFamily: 'Arial',
-            fontSize: '24px',
-            color: '#fde68a',
-            stroke: '#000000',
-            strokeThickness: 4
-        }).setOrigin(0.5).setDepth(250);
-
-        this.tweens.add({
-            targets: levelUpText,
-            y: levelUpText.y - 40,
-            alpha: 0,
-            duration: 900,
-            ease: 'Cubic.easeOut',
-            onComplete: () => levelUpText.destroy()
-        });
+        this.playLevelUpEffect(player);
 
         if (this.playerProfile?.visible) {
             this.updatePlayerProfilePanel();
         }
+    }
+
+    playLevelUpEffect(player){
+        const effectDepth = 250;
+        const effectX = player.x;
+        const effectY = player.y - 32;
+        const lightBeam = this.add.rectangle(effectX, effectY + 6, 34, 148, 0x7de7ff, 0.18).setDepth(effectDepth);
+        const auraCore = this.add.ellipse(effectX, effectY - 10, 46, 46, 0xf8f4c4, 0.72).setDepth(effectDepth + 1);
+        const auraGlow = this.add.ellipse(effectX, effectY - 10, 86, 86, 0x74dfff, 0.18).setDepth(effectDepth);
+        const ringOuter = this.add.ellipse(effectX, effectY - 10, 118, 46).setDepth(effectDepth + 1);
+        ringOuter.setStrokeStyle(3, 0x8df0ff, 0.82);
+        const ringInner = this.add.ellipse(effectX, effectY - 10, 82, 26).setDepth(effectDepth + 1);
+        ringInner.setStrokeStyle(2, 0xffef9b, 0.74);
+        const wingLeft = this.add.triangle(effectX - 56, effectY - 8, 0, 18, 0, -18, -42, 0, 0x7bdfff, 0.32).setDepth(effectDepth);
+        const wingRight = this.add.triangle(effectX + 56, effectY - 8, 0, -18, 0, 18, 42, 0, 0x7bdfff, 0.32).setDepth(effectDepth);
+        const wingLeftInner = this.add.triangle(effectX - 48, effectY - 8, 0, 12, 0, -12, -28, 0, 0xfff2ae, 0.24).setDepth(effectDepth + 1);
+        const wingRightInner = this.add.triangle(effectX + 48, effectY - 8, 0, -12, 0, 12, 28, 0, 0xfff2ae, 0.24).setDepth(effectDepth + 1);
+        const levelUpShadow = this.add.text(effectX + 2, effectY - 82, `LEVEL UP`, {
+            fontFamily: 'Arial',
+            fontSize: '28px',
+            color: '#03131d',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(effectDepth + 2);
+        const levelUpText = this.add.text(effectX, effectY - 86, `LEVEL UP`, {
+            fontFamily: 'Arial',
+            fontSize: '28px',
+            color: '#fff4c5',
+            fontStyle: 'bold',
+            stroke: '#61dfff',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(effectDepth + 3);
+        const levelText = this.add.text(effectX, effectY - 56, `Lv ${player.level}`, {
+            fontFamily: 'Arial',
+            fontSize: '18px',
+            color: '#dffbff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(effectDepth + 3);
+
+        const effectObjects = [
+            lightBeam,
+            auraCore,
+            auraGlow,
+            ringOuter,
+            ringInner,
+            wingLeft,
+            wingRight,
+            wingLeftInner,
+            wingRightInner,
+            levelUpShadow,
+            levelUpText,
+            levelText
+        ];
+
+        this.tweens.add({
+            targets: [ringOuter, ringInner],
+            angle: 360,
+            duration: 2200,
+            ease: 'Sine.easeInOut'
+        });
+
+        this.tweens.add({
+            targets: [wingLeft, wingRight],
+            scaleX: 1.16,
+            scaleY: 1.08,
+            alpha: 0.52,
+            duration: 520,
+            yoyo: true,
+            repeat: 2,
+            ease: 'Sine.easeInOut'
+        });
+
+        this.tweens.add({
+            targets: [wingLeftInner, wingRightInner],
+            scaleX: 1.12,
+            alpha: 0.38,
+            duration: 520,
+            yoyo: true,
+            repeat: 2,
+            ease: 'Sine.easeInOut'
+        });
+
+        this.tweens.add({
+            targets: [auraCore, auraGlow, lightBeam],
+            scaleY: 1.18,
+            alpha: { from: 0.18, to: 0.84 },
+            duration: 340,
+            yoyo: true,
+            repeat: 1,
+            ease: 'Cubic.easeOut'
+        });
+
+        this.tweens.add({
+            targets: [levelUpShadow, levelUpText, levelText],
+            y: '-=28',
+            alpha: 0,
+            duration: 1650,
+            ease: 'Sine.easeOut'
+        });
+
+        this.tweens.add({
+            targets: [ringOuter, ringInner, auraCore, auraGlow, wingLeft, wingRight, wingLeftInner, wingRightInner, lightBeam],
+            alpha: 0,
+            duration: 1650,
+            ease: 'Sine.easeOut',
+            onComplete: () => {
+                effectObjects.forEach(effectObject => effectObject.destroy());
+            }
+        });
     }
 
     upgradePlayerAttack(attackType){
