@@ -83,6 +83,7 @@ export default class EnemyManager {
     enemy.isDead = false;
     enemy.lastDamageByAttack = {};
     enemy.lastTintAt = 0;
+    enemy.lastHitLocation = { x: enemy.x, y: enemy.y };
     enemy.hpBarWidth = 60;
     enemy.hpBarHeight = 8;
     enemy.hpBarOffsetY = enemyConfig.hpBarOffsetY ?? 18;
@@ -221,6 +222,11 @@ export default class EnemyManager {
     enemy.lastDamageByAttack[attackType] = currentTime;
     enemy.isHurting = true;
     enemy.currentHp = Math.max(0, enemy.currentHp - damage);
+    enemy.setLastHitLocation({
+      x: gameState.player?.body?.center.x ?? gameState.player?.x ?? enemy.x,
+      y: gameState.player?.body?.center.y ?? gameState.player?.y ?? enemy.y,
+    });
+    enemy.provoke();
     this.applyEnemyKnockback(enemy, gameState.player, attackType, damage);
     enemy.anims.play(enemy.animationKeys.hurt, true);
     enemy.showDamagePopup(enemy.x + 40, enemy.y + 40, damage);
@@ -243,6 +249,9 @@ export default class EnemyManager {
 
       enemy.isHurting = false;
       enemy.anims.play(enemy.animationKeys.walk, true);
+      if (enemy.isChasingPlayer) {
+        enemy.beginTweenToLocation(enemy.lastHitLocation?.x ?? enemy.x, ENEMY_SETTINGS);
+      }
     });
   }
 

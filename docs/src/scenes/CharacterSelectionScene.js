@@ -52,6 +52,18 @@ export default class CharacterSelectionScene extends Phaser.Scene {
       strokeThickness: 5,
     }).setDepth(5);
 
+    this.add.text(24, this.scale.height - 18, 'developer: Marc Roland Soniega', {
+      fontFamily: 'Arial',
+      fontSize: '18px',
+      color: '#ffe8a6',
+      fontStyle: 'bold',
+      stroke: '#000000',
+      strokeThickness: 4,
+      shadow: { offsetX: 0, offsetY: 0, color: '#8f6b16', blur: 10, fill: true },
+    })
+      .setOrigin(0, 1)
+      .setDepth(6);
+
     this.promptText = this.add.text(this.scale.width / 2, 380, 'Choose a character first', {
       fontFamily: 'Arial',
       fontSize: '24px',
@@ -258,6 +270,6 @@ export default class CharacterSelectionScene extends Phaser.Scene {
     }
 
     gameState.backgroundMusic?.stop();
-    this.scene.start(SCENE_KEYS.MAIN_GAME);
+    this.scene.start(SCENE_KEYS.WORLD_LOADING, { targetSceneKey: SCENE_KEYS.MAIN_GAME });
   }
 }

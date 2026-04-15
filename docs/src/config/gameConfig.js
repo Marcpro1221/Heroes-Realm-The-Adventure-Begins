@@ -1,6 +1,8 @@
 import { GAME_DIMENSIONS, PHYSICS_CONFIG } from '../constants/gameConstants.js';
+import InitialLoadingScene from '../scenes/InitialLoadingScene.js';
 import BootScene from '../scenes/BootScene.js';
 import CharacterSelectionScene from '../scenes/CharacterSelectionScene.js';
+import WorldLoadingScene from '../scenes/WorldLoadingScene.js';
 import GrassyBiomeWorldScene from '../scenes/worlds/GrassyBiomeWorldScene.js';
 import GrassyBiomeClimbScene from '../scenes/worlds/GrassyBiomeClimbScene.js';
 
@@ -16,7 +18,14 @@ const gameConfig = {
   pixelArt: true,
   backgroundColor: 0x87ceeb,
   disableVisibilityChange: true,
-  scene: [BootScene, CharacterSelectionScene, GrassyBiomeWorldScene, GrassyBiomeClimbScene],
+  scene: [
+    InitialLoadingScene,
+    BootScene,
+    CharacterSelectionScene,
+    WorldLoadingScene,
+    GrassyBiomeWorldScene,
+    GrassyBiomeClimbScene,
+  ],
   physics: PHYSICS_CONFIG,
   callbacks: {
     postBoot: (game) => {

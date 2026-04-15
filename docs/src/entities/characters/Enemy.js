@@ -27,6 +27,8 @@ export default class Enemy extends Character {
     this.isChasingPlayer = false;
     this.isRepositioning = false;
     this.repositionTween = null;
+    this.tweenTargetX = null;
+    this.lastHitLocation = null;
     this.lastProvokedAt = -Infinity;
     this.lastAttackAt = -Infinity;
     this.lastObstacleTurnAt = -Infinity;
@@ -41,7 +43,24 @@ export default class Enemy extends Character {
    * Handles patrol movement, knockback decay, and facing updates.
    */
   updateMovement(enemySettings) {
+    const currentTime = this.scene.time.now;
+    if (this.isChasingPlayer && (currentTime - this.lastProvokedAt) >= (enemySettings?.disengageDelayMs ?? 0)) {
+      this.isChasingPlayer = false;
+    }
+
     if (this.isRepositioning) {
+      this.setVelocityX(0);
+      return;
+    }
+
+    if (
+      this.isChasingPlayer
+      && !this.isHurting
+      && !this.repositionTween
+      && this.lastHitLocation
+      && Math.abs(this.x - this.getClampedTweenTargetX(this.lastHitLocation.x, enemySettings)) > 6
+    ) {
+      this.beginTweenToLocation(this.lastHitLocation.x, enemySettings);
       this.setVelocityX(0);
       return;
     }
@@ -99,6 +118,18 @@ export default class Enemy extends Character {
   provoke() {
     this.lastProvokedAt = this.scene.time.now;
     this.lastAttackAt = this.scene.time.now;
+    this.isChasingPlayer = true;
+  }
+
+  /**
+   * Stores the player's most recent hit location as the next chase target.
+   */
+  setLastHitLocation(location) {
+    if (!location || !Number.isFinite(location.x) || !Number.isFinite(location.y)) {
+      return;
+    }
+
+    this.lastHitLocation = { x: location.x, y: location.y };
   }
 
   getSafePatrolBounds(enemySettings) {
@@ -178,21 +209,48 @@ export default class Enemy extends Character {
    * Tweens the enemy to a fresh random point in its patrol lane after combat ends.
    */
   beginReposition(enemySettings) {
-    if (this.isRepositioning) {
+    this.isChasingPlayer = false;
+    const safePatrolBounds = this.getSafePatrolBounds(enemySettings);
+    const targetX = Phaser.Math.Between(Math.round(safePatrolBounds.min), Math.round(safePatrolBounds.max));
+    this.beginTweenToLocation(targetX, enemySettings, () => {
+      this.patrolDirection = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
+      this.applyFacing(this.patrolDirection > 0);
+    });
+  }
+
+  /**
+   * Starts or retargets the current tween movement using a world X destination.
+   */
+  beginTweenToLocation(targetX, enemySettings, onComplete = null) {
+    const resolvedTargetX = this.getClampedTweenTargetX(targetX, enemySettings);
+    if (!Number.isFinite(resolvedTargetX)) {
       return;
     }
 
-    this.isChasingPlayer = false;
+    if (this.repositionTween && this.tweenTargetX !== null && Math.abs(this.tweenTargetX - resolvedTargetX) <= 2) {
+      return;
+    }
+
     this.isRepositioning = true;
+    this.tweenTargetX = resolvedTargetX;
     this.setVelocity(0, 0);
-    const safePatrolBounds = this.getSafePatrolBounds(enemySettings);
-    const targetX = Phaser.Math.Between(Math.round(safePatrolBounds.min), Math.round(safePatrolBounds.max));
+    if (Math.abs(resolvedTargetX - this.x) > 1) {
+      this.patrolDirection = resolvedTargetX >= this.x ? 1 : -1;
+      this.applyFacing(this.patrolDirection > 0);
+    }
+    const distance = Math.abs(resolvedTargetX - this.x);
+    const chaseSpeed = enemySettings?.chaseSpeed ?? 1;
+    const tweenDuration = Math.max(
+      180,
+      Math.round((distance / Math.max(chaseSpeed, 1)) * 1000),
+      enemySettings?.repositionDurationMs ?? 0,
+    );
 
     this.repositionTween?.stop();
     this.repositionTween = this.scene.tweens.add({
       targets: this,
-      x: targetX,
-      duration: enemySettings.repositionDurationMs,
+      x: resolvedTargetX,
+      duration: tweenDuration,
       ease: 'Sine.easeInOut',
       onUpdate: () => {
         this.body?.updateFromGameObject();
@@ -204,14 +262,23 @@ export default class Enemy extends Character {
       onComplete: () => {
         this.repositionTween = null;
         this.isRepositioning = false;
-        this.patrolDirection = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
-        this.applyFacing(this.patrolDirection > 0);
+        this.tweenTargetX = null;
+        onComplete?.();
       },
       onStop: () => {
         this.repositionTween = null;
         this.isRepositioning = false;
+        this.tweenTargetX = null;
       },
     });
+  }
+
+  /**
+   * Returns the safe X destination used by tween-based enemy movement.
+   */
+  getClampedTweenTargetX(targetX, enemySettings) {
+    const safePatrolBounds = this.getSafePatrolBounds(enemySettings);
+    return Phaser.Math.Clamp(targetX, safePatrolBounds.min, safePatrolBounds.max);
   }
 
   /**

@@ -35,6 +35,10 @@ export default class BaseWorldScene extends Phaser.Scene {
   }
 
   preload() {
+    if (this.textures.exists('ground') && this.cache.audio.exists('grassyBiome')) {
+      return;
+    }
+
     loadMainSceneAssets(this, this.sceneConfig?.assetWorldId);
   }
 
@@ -572,7 +576,10 @@ export default class BaseWorldScene extends Phaser.Scene {
       : null;
 
     this.cleanupSceneState();
-    this.scene.start(targetSceneKey);
+    this.scene.start(SCENE_KEYS.WORLD_LOADING, {
+      targetSceneKey,
+      targetWorldAssetId: targetSceneConfig?.assetWorldId ?? null,
+    });
   }
 
   applyPlayerSceneEntryPosition(player, entryConfig = {}) {

@@ -26,7 +26,7 @@ export const PHYSICS_CONFIG = Object.freeze({
   default: 'arcade',
   arcade: {
     gravity: { y: 800 },
-    debug: true,
+    debug: false,
   },
 });
 
@@ -87,7 +87,7 @@ export const ENEMY_SETTINGS = Object.freeze({
   patrolEdgePadding: 18,
   obstacleNudgeDistance: 14,
   chaseSpeed: 88,
-  disengageDelayMs: 5000,
+  disengageDelayMs: 2000,
   repositionDurationMs: 900,
 });
 
