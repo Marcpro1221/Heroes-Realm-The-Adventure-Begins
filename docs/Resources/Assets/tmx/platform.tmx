@@ -4,7 +4,7 @@
   <image source="../Images/Grassy Biome.png" width="1536" height="1024"/>
  </tileset>
  <tileset firstgid="1537" name="trees" tilewidth="32" tileheight="32" tilecount="1278" columns="142">
-  <image source="../Images/trees.png" width="4545" height="315"/>
+  <image source="../Worlds/grassy-biome/Backgrounds/trees.png" width="4545" height="315"/>
  </tileset>
  <layer id="1" name="Tile Layer 1" width="148" height="7">
   <data encoding="csv">
