@@ -5,6 +5,35 @@ import { SCENE_KEYS } from './sceneKeys.js';
 const WORLD_WIDTH = MAIN_SCENE_DIMENSIONS.width;
 const WORLD_HEIGHT = MAIN_SCENE_DIMENSIONS.height;
 
+const DEFAULT_WORLD_LOADING_SCREEN = Object.freeze({
+  title: 'Entering The World',
+  subtitle: 'Loading terrain, enemies, music, and your selected hero...',
+  backgroundColor: '#061018',
+  panelColor: 0x0d1c2a,
+  panelStrokeColor: 0x60d5ff,
+  titleColor: '#f3e8b3',
+  subtitleColor: '#d8efff',
+  barFrameColor: 0x142739,
+  barStrokeColor: 0x6de8ff,
+  barFillColor: 0x5eead4,
+  percentColor: '#fff7d6',
+  orbColors: Object.freeze([
+    Object.freeze({ xOffset: -260, yOffset: -90, width: 320, height: 320, color: 0x0d3550, alpha: 0.35 }),
+    Object.freeze({ xOffset: 250, yOffset: 120, width: 260, height: 260, color: 0x16466a, alpha: 0.24 }),
+  ]),
+});
+
+const createWorldLoadingScreen = (overrides = {}) => Object.freeze({
+  ...DEFAULT_WORLD_LOADING_SCREEN,
+  ...overrides,
+  orbColors: Object.freeze(overrides.orbColors ?? DEFAULT_WORLD_LOADING_SCREEN.orbColors),
+});
+
+const createWorldPreloadCheck = ({ textureKeys = [], audioKeys = [] } = {}) => Object.freeze({
+  textureKeys: Object.freeze(textureKeys),
+  audioKeys: Object.freeze(audioKeys),
+});
+
 const SHARED_BACKGROUND_LAYOUT = Object.freeze({
   clouds: Object.freeze({ x: 0, y: WORLD_HEIGHT - 1450, depth: 1, scrollFactorX: 0.2, scrollFactorY: 0.1 }),
   mountain: Object.freeze({ x: 0, y: WORLD_HEIGHT - 970, depth: 2, scrollFactorX: 0.5, scrollFactorY: 0.4 }),
@@ -72,6 +101,14 @@ export const WORLD_SCENE_CONFIGS = Object.freeze({
     playerSpawn: Object.freeze({ x: 250, y: 1250 }),
     nextSceneKey: SCENE_KEYS.GRASSY_BIOME_2,
     previousSceneKey: null,
+    loadingScreen: createWorldLoadingScreen({
+      title: 'Entering Grassy Biome',
+      subtitle: 'Loading ruins, platforms, enemies, music, and your selected hero...',
+    }),
+    preloadCheck: createWorldPreloadCheck({
+      textureKeys: ['ground', 'clouds', 'mountain', 'trees', 'potionShop'],
+      audioKeys: ['grassyBiome'],
+    }),
     rightTransitionThresholdX: WORLD_WIDTH - 24,
     leftTransitionThresholdX: null,
     rightSceneEntrySpawn: Object.freeze({ x: 220, y: 1250 }),
@@ -85,6 +122,26 @@ export const WORLD_SCENE_CONFIGS = Object.freeze({
         label: 'COMING SOON....',
         labelOffsetX: 100,
         labelDepth: 12,
+      }),
+      potionShop: Object.freeze({
+        textureKey: 'potionShop',
+        staticPlatformIndex: 0,
+        placementPercent: 0.8,
+        scale: 0.78,
+        footOffsetY: 0,
+        depthOffset: 3,
+        crop: Object.freeze({
+          x: 31,
+          y: 9,
+          width: 528,
+          height: 348,
+        }),
+        roomDoorBounds: Object.freeze({
+          x: 0.43,
+          y: 0.55,
+          width: 0.14,
+          height: 0.34,
+        }),
       }),
     }),
     platforms: Object.freeze({
@@ -118,6 +175,17 @@ export const WORLD_SCENE_CONFIGS = Object.freeze({
     playerSpawn: Object.freeze({ x: 220, y: 1250 }),
     nextSceneKey: null,
     previousSceneKey: SCENE_KEYS.GRASSY_BIOME_1,
+    loadingScreen: createWorldLoadingScreen({
+      title: 'Climbing The Forest Edge',
+      subtitle: 'Loading the next biome section, enemies, and ambient audio...',
+      barFillColor: 0x8bdb81,
+      panelStrokeColor: 0x79efc5,
+      barStrokeColor: 0x79efc5,
+    }),
+    preloadCheck: createWorldPreloadCheck({
+      textureKeys: ['ground', 'clouds', 'mountain', 'trees', 'healerNpc'],
+      audioKeys: ['grassyBiome', 'healing'],
+    }),
     rightTransitionThresholdX: null,
     leftTransitionThresholdX: 1,
     leftSceneEntrySpawn: Object.freeze({ x: WORLD_WIDTH - 260, y: 1250 }),
@@ -264,3 +332,4 @@ export const WORLD_SCENE_CONFIGS = Object.freeze({
 });
 
 export const getWorldSceneConfig = (sceneKey) => WORLD_SCENE_CONFIGS[sceneKey] ?? null;
+export const getWorldLoadingScreenConfig = (sceneKey) => getWorldSceneConfig(sceneKey)?.loadingScreen ?? DEFAULT_WORLD_LOADING_SCREEN;

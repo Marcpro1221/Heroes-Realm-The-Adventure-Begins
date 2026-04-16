@@ -26,7 +26,7 @@ export const PHYSICS_CONFIG = Object.freeze({
   default: 'arcade',
   arcade: {
     gravity: { y: 800 },
-    debug: false,
+    debug: true,
   },
 });
 
@@ -114,8 +114,8 @@ export const ENEMY_ARCHETYPES = Object.freeze({
     maxHp: 50,
     defense: 10,
     expReward: 16,
-    contactDamageMinPercent: 0.07,
-    contactDamageMaxPercent: 0.10,
+    contactDamageFixedMin: 5,
+    contactDamageFixedMax: 8,
     patrolSpeed: 55.55,
   }),
   [ENEMY_TYPES.VAMPIRE_BAT]: Object.freeze({

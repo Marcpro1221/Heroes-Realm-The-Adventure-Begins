@@ -1,5 +1,5 @@
 import { registerEnemyAnimations, registerPlayerAnimations } from '../../assets/animations.js';
-import { loadMainSceneAssets } from '../../assets/loaders.js';
+import { areWorldSceneAssetsReady, loadMainSceneAssets } from '../../assets/loaders.js';
 import {
   ENEMY_ARCHETYPES,
   ENEMY_SETTINGS,
@@ -32,10 +32,14 @@ export default class BaseWorldScene extends Phaser.Scene {
     this.staticPlatforms = [];
     this.healerNpc = null;
     this.healerUi = null;
+    this.worldProps = {};
+    this.roomEntrance = null;
+    this.roomEntranceUi = null;
+    this.roomEntranceDismissed = false;
   }
 
   preload() {
-    if (this.textures.exists('ground') && this.cache.audio.exists('grassyBiome')) {
+    if (areWorldSceneAssetsReady(this, this.sceneConfig)) {
       return;
     }
 
@@ -108,6 +112,7 @@ export default class BaseWorldScene extends Phaser.Scene {
     if (gameState.enemyGroup) {
       this.enemyManager?.update();
     }
+    this.updateRoomEntrancePrompt();
     this.refreshPlayerUi();
     this.checkSceneTransition();
   }
@@ -204,6 +209,8 @@ export default class BaseWorldScene extends Phaser.Scene {
     }
 
     this.createHealerNpc();
+    this.createWorldProps();
+    this.buildRoomEntranceDialog();
   }
 
   getScenePlatformPrefix() {
@@ -285,6 +292,218 @@ export default class BaseWorldScene extends Phaser.Scene {
     this.buildHealerDialog();
     npc.on('pointerdown', () => this.openHealerDialog());
     bubbleHitArea.on('pointerdown', () => this.openHealerDialog());
+  }
+
+  createWorldProps() {
+    Object.entries(this.sceneConfig?.props ?? {}).forEach(([propKey, propConfig]) => {
+      if (propKey === 'portal' || propKey === 'healerNpc') {
+        return;
+      }
+
+      this.createStaticPlatformProp(propKey, propConfig);
+    });
+  }
+
+  createStaticPlatformProp(propKey, propConfig) {
+    if (!propConfig?.textureKey || !this.textures.exists(propConfig.textureKey)) {
+      return;
+    }
+
+    const targetPlatform = this.staticPlatforms[propConfig.staticPlatformIndex ?? -1];
+    if (!targetPlatform) {
+      return;
+    }
+
+    const platformWidth = targetPlatform.displayWidth ?? targetPlatform.width ?? 0;
+    const propX = targetPlatform.x + (platformWidth * (propConfig.placementPercent ?? 0.5));
+    const propY = targetPlatform.y + (propConfig.footOffsetY ?? 0);
+    const prop = this.add.image(propX, propY, propConfig.textureKey)
+      .setOrigin(0.5, 1)
+      .setDepth((targetPlatform.depth ?? 10) + (propConfig.depthOffset ?? 1))
+      .setAlpha(propConfig.alpha ?? 1);
+
+    if (propConfig.crop) {
+      prop.setCrop(
+        propConfig.crop.x ?? 0,
+        propConfig.crop.y ?? 0,
+        propConfig.crop.width,
+        propConfig.crop.height,
+      );
+    }
+
+    if (typeof propConfig.scale === 'number') {
+      prop.setScale(propConfig.scale);
+    }
+
+    if (propConfig.crop && typeof propConfig.displayWidth !== 'number' && typeof propConfig.displayHeight !== 'number') {
+      const cropScale = typeof propConfig.scale === 'number' ? propConfig.scale : 1;
+      prop.displayWidth = propConfig.crop.width * cropScale;
+      prop.displayHeight = propConfig.crop.height * cropScale;
+    }
+
+    if (typeof propConfig.displayWidth === 'number') {
+      prop.displayWidth = propConfig.displayWidth;
+    }
+
+    if (typeof propConfig.displayHeight === 'number') {
+      prop.displayHeight = propConfig.displayHeight;
+    }
+
+    this.worldProps[propKey] = prop;
+
+    if (propKey === 'potionShop' && propConfig.roomDoorBounds) {
+      this.createPotionShopDoorInteraction(prop, propConfig);
+    }
+
+    return prop;
+  }
+
+  createPotionShopDoorInteraction(prop, propConfig) {
+    const displayWidth = prop.displayWidth ?? prop.width ?? 0;
+    const displayHeight = prop.displayHeight ?? prop.height ?? 0;
+    const originX = prop.originX ?? 0.5;
+    const originY = prop.originY ?? 1;
+    const propLeft = prop.x - (displayWidth * originX);
+    const propTop = prop.y - (displayHeight * originY);
+    const bounds = propConfig.roomDoorBounds;
+
+    this.roomEntrance = {
+      prop,
+      doorBounds: new Phaser.Geom.Rectangle(
+        propLeft + (displayWidth * bounds.x),
+        propTop + (displayHeight * bounds.y),
+        displayWidth * bounds.width,
+        displayHeight * bounds.height,
+      ),
+    };
+  }
+
+  buildRoomEntranceDialog() {
+    const panelWidth = 360;
+    const panelHeight = 160;
+    const panelX = Math.round((this.cameras.main.width - panelWidth) / 2);
+    const panelY = Math.round((this.cameras.main.height - panelHeight) / 2);
+    const depth = 240;
+    const overlay = this.add.rectangle(0, 0, this.cameras.main.width, this.cameras.main.height, 0x02050b, 0.52)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(depth)
+      .setVisible(false);
+    const panel = this.add.rectangle(panelX, panelY, panelWidth, panelHeight, 0x08111f, 0.97)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, 0xc4a968, 0.7)
+      .setScrollFactor(0)
+      .setDepth(depth + 1)
+      .setVisible(false);
+    const title = this.add.text(panelX + (panelWidth / 2), panelY + 44, 'Enter Room', {
+      fontFamily: 'Arial',
+      fontSize: '26px',
+      color: '#f8edd0',
+      fontStyle: 'bold',
+    })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(depth + 2)
+      .setVisible(false);
+    const yesButton = this.add.rectangle(panelX + 105, panelY + 112, 96, 38, 0x1d6f42, 0.95)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(depth + 2)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
+    const noButton = this.add.rectangle(panelX + 255, panelY + 112, 96, 38, 0x5e2530, 0.95)
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(depth + 2)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
+    const yesLabel = this.add.text(panelX + 105, panelY + 112, 'Yes', {
+      fontFamily: 'Arial',
+      fontSize: '18px',
+      color: '#f5fff9',
+      fontStyle: 'bold',
+    })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(depth + 3)
+      .setVisible(false);
+    const noLabel = this.add.text(panelX + 255, panelY + 112, 'No', {
+      fontFamily: 'Arial',
+      fontSize: '18px',
+      color: '#fff3f5',
+      fontStyle: 'bold',
+    })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(depth + 3)
+      .setVisible(false);
+
+    this.roomEntranceUi = {
+      visible: false,
+      bounds: new Phaser.Geom.Rectangle(panelX, panelY, panelWidth, panelHeight),
+      overlay,
+      panel,
+      title,
+      yesButton,
+      noButton,
+      yesLabel,
+      noLabel,
+      elements: [overlay, panel, title, yesButton, noButton, yesLabel, noLabel],
+    };
+
+    yesButton.on('pointerdown', () => this.confirmRoomEntrance());
+    noButton.on('pointerdown', () => this.closeRoomEntranceDialog(true));
+  }
+
+  updateRoomEntrancePrompt() {
+    if (!this.roomEntrance?.doorBounds || !gameState.player?.body) {
+      return;
+    }
+
+    const playerBodyRect = new Phaser.Geom.Rectangle(
+      gameState.player.body.left,
+      gameState.player.body.top,
+      gameState.player.body.width,
+      gameState.player.body.height,
+    );
+    const isOverlappingDoor = Phaser.Geom.Intersects.RectangleToRectangle(playerBodyRect, this.roomEntrance.doorBounds);
+
+    if (!isOverlappingDoor) {
+      this.roomEntranceDismissed = false;
+      this.closeRoomEntranceDialog(false);
+      return;
+    }
+
+    if (!this.roomEntranceDismissed && !this.roomEntranceUi?.visible) {
+      this.openRoomEntranceDialog();
+    }
+  }
+
+  openRoomEntranceDialog() {
+    if (!this.roomEntranceUi) {
+      return;
+    }
+
+    this.playerProfile?.close();
+    this.roomEntranceUi.visible = true;
+    this.roomEntranceUi.elements.forEach((element) => element.setVisible(true));
+  }
+
+  closeRoomEntranceDialog(dismissUntilExit = false) {
+    if (dismissUntilExit) {
+      this.roomEntranceDismissed = true;
+    }
+
+    if (!this.roomEntranceUi?.visible) {
+      return;
+    }
+
+    this.roomEntranceUi.visible = false;
+    this.roomEntranceUi.elements.forEach((element) => element.setVisible(false));
+  }
+
+  confirmRoomEntrance() {
+    this.closeRoomEntranceDialog(true);
   }
 
   ensureHealerNpcAnimation(textureKey) {
@@ -717,6 +936,10 @@ export default class BaseWorldScene extends Phaser.Scene {
   }
 
   handleProfileOutsideClick(pointer) {
+    if (this.roomEntranceUi?.visible && !this.roomEntranceUi.bounds.contains(pointer.x, pointer.y)) {
+      this.closeRoomEntranceDialog(true);
+    }
+
     if (this.healerUi?.visible) {
       const clickedNpc = this.healerNpc?.npc?.getBounds?.() && Phaser.Geom.Rectangle.Contains(this.healerNpc.npc.getBounds(), pointer.worldX, pointer.worldY);
       const clickedBubble = this.healerNpc?.bubbleHitArea?.getBounds?.() && Phaser.Geom.Rectangle.Contains(this.healerNpc.bubbleHitArea.getBounds(), pointer.worldX, pointer.worldY);
@@ -1017,13 +1240,20 @@ export default class BaseWorldScene extends Phaser.Scene {
     this.healerNpc?.bubbleHitArea?.removeAllListeners();
     this.healerUi?.yesButton?.removeAllListeners();
     this.healerUi?.noButton?.removeAllListeners();
+    this.roomEntranceUi?.yesButton?.removeAllListeners();
+    this.roomEntranceUi?.noButton?.removeAllListeners();
     this.healerUi?.elements?.forEach((element) => element?.destroy?.());
+    this.roomEntranceUi?.elements?.forEach((element) => element?.destroy?.());
     this.healerNpc?.bubble?.destroy?.();
     this.healerNpc?.bubbleText?.destroy?.();
     this.healerNpc?.bubbleHitArea?.destroy?.();
     this.healerNpc?.npc?.destroy?.();
     this.healerNpc = null;
     this.healerUi = null;
+    this.roomEntrance = null;
+    this.roomEntranceUi = null;
+    this.roomEntranceDismissed = false;
+    this.worldProps = {};
     this.staticPlatforms = [];
     gameState.player?.nameLabel?.destroy();
     gameState.player?.anims?.stop();

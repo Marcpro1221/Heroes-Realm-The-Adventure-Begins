@@ -39,6 +39,7 @@ export const WORLD_IMAGE_ASSETS = Object.freeze({
     }),
     props: Object.freeze({
       portal: buildWorldAssetPath(WORLD_IDS.GRASSY_BIOME, 'Props', 'portal.png'),
+      potionShop: buildWorldAssetPath(WORLD_IDS.GRASSY_BIOME, 'House, Shop, Interior, Exterior', 'PotionShop.png'),
     }),
   }),
 });

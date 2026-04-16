@@ -107,3 +107,24 @@ export const loadMainSceneAssets = (scene, worldAssetId = null) => {
   ], ENEMY_SPRITESHEETS);
   loadSpritesheets(scene, ['healerNpc'], NPC_SPRITESHEETS);
 };
+
+/**
+ * Checks whether the current world's critical assets are already cached.
+ * This lets world scenes skip duplicate preload work after loading screens
+ * or scene restarts while staying configurable for future worlds.
+ */
+export const areWorldSceneAssetsReady = (scene, worldSceneConfig = null) => {
+  if (!worldSceneConfig) {
+    return false;
+  }
+
+  const selectedCharacterConfig = getCharacterConfig(scene.registry.get('selectedCharacterId'));
+  const requiredTextureKeys = [
+    ...(worldSceneConfig.preloadCheck?.textureKeys ?? []),
+    selectedCharacterConfig?.spawnTextureKey,
+  ].filter(Boolean);
+  const requiredAudioKeys = worldSceneConfig.preloadCheck?.audioKeys ?? [];
+
+  return requiredTextureKeys.every((textureKey) => scene.textures.exists(textureKey))
+    && requiredAudioKeys.every((audioKey) => scene.cache.audio.exists(audioKey));
+};
