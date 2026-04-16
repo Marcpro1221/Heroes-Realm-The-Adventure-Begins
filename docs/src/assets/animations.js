@@ -79,7 +79,7 @@ export const registerPlayerAnimations = (scene, characterConfig) => {
     { action: 'fall', frameRate: 10, repeat: -1 },
     { action: 'smash', frameRate: 25, repeat: 0 },
     { action: 'thrust', frameRate: 20, repeat: 0 },
-    { action: 'spinAttack', frameRate: 10, repeat: 0 },
+    { action: 'spinAttack', frameRate: 15, repeat: 0 },
     { action: 'surpriseJump', frameRate: 12, repeat: 0 },
     { action: 'specialAttack', frameRate: 10, repeat: 0 },
     { action: 'heal', frameRate: 25, repeat: 0 },
@@ -257,5 +257,17 @@ export const registerEnemyAnimations = (scene) => {
       frameRate,
       repeat,
     });
+  });
+};
+
+/**
+ * Registers world prop animations such as the spinning portal.
+ */
+export const registerWorldAnimations = (scene) => {
+  ensureAnimation(scene, {
+    key: 'world.portal.spin',
+    frames: scene.anims.generateFrameNumbers('portal', { start: 0, end: 9 }),
+    frameRate: 10,
+    repeat: -1,
   });
 };

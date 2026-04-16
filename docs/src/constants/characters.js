@@ -149,7 +149,7 @@ export const CHARACTER_CONFIGS = Object.freeze({
     effects: {
       slashTextureKey: 'reaper.slashEffect',
       slashAnimation: { key: 'reaper.slashEffect', start: 0, end: 9, frameRate: 24 },
-      hitEffectAttacks: ['thrust', 'specialAttack'],
+      hitEffectAttacks: ['smash', 'thrust', 'spinAttack', 'specialAttack'],
       slashScale: 1.08,
       slashAlpha: 0.94,
       slashAngle: 22,

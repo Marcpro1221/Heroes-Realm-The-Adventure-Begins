@@ -14,6 +14,6 @@
   "dependencies": {
     "live-server": "^1.2.2",
     "node-modules": "^1.0.1",
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.14"
   }
 }

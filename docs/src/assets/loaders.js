@@ -3,6 +3,7 @@ import {
   AUDIO_ASSETS,
   ENEMY_SPRITESHEETS,
   NPC_SPRITESHEETS,
+  WORLD_PROP_SPRITESHEETS,
   UI_IMAGE_ASSETS,
   WORLD_IDS,
   WORLD_IMAGE_ASSETS,
@@ -89,6 +90,7 @@ export const loadMainSceneAssets = (scene, worldAssetId = null) => {
   });
   loadSelectedCharacterSpritesheets(scene, selectedCharacterConfig);
   loadSpritesheets(scene, [
+    'portal',
     'enemy.mushroom.walk',
     'enemy.mushroom.idle',
     'enemy.mushroom.hurt',
@@ -104,7 +106,10 @@ export const loadMainSceneAssets = (scene, worldAssetId = null) => {
     'enemy.goblinKing.hurt',
     'enemy.goblinKing.attack',
     'enemy.goblinKing.death',
-  ], ENEMY_SPRITESHEETS);
+  ], {
+    ...WORLD_PROP_SPRITESHEETS,
+    ...ENEMY_SPRITESHEETS,
+  });
   loadSpritesheets(scene, ['healerNpc'], NPC_SPRITESHEETS);
 };
 
