@@ -102,8 +102,8 @@ export const WORLD_SCENE_CONFIGS = Object.freeze({
     nextSceneKey: SCENE_KEYS.GRASSY_BIOME_2,
     previousSceneKey: null,
     loadingScreen: createWorldLoadingScreen({
-      title: 'Entering Grassy Biome',
-      subtitle: 'Loading ruins, platforms, enemies, music, and your selected hero...',
+      title: 'Entering Sylvan Region',
+      subtitle: 'Loading Sylvan Region ruins, platforms, enemies, music, and your selected hero...',
     }),
     preloadCheck: createWorldPreloadCheck({
       textureKeys: ['ground', 'clouds', 'mountain', 'trees', 'potionShop'],

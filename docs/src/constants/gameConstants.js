@@ -115,7 +115,7 @@ export const ENEMY_ARCHETYPES = Object.freeze({
     defense: 10,
     expReward: 16,
     contactDamageFixedMin: 5,
-    contactDamageFixedMax: 8,
+    contactDamageFixedMax: 7,
     patrolSpeed: 55.55,
   }),
   [ENEMY_TYPES.VAMPIRE_BAT]: Object.freeze({

@@ -51,6 +51,8 @@ export default class Player extends Character {
     this.attackSoundPlayed = false;
     this.attackSoundFramesPlayed = new Set();
     this.attackShakeFramesPlayed = new Set();
+    this.attackEffectFramesPlayed = new Set();
+    this.smashStepApplied = false;
     this.thrustStepApplied = false;
     this.spinStepApplied = false;
     this.specialAttackTriggered = false;
@@ -372,6 +374,42 @@ export default class Player extends Character {
     this.attackSoundPlayed = false;
     this.attackSoundFramesPlayed.clear();
     this.attackShakeFramesPlayed.clear();
+    this.attackEffectFramesPlayed.clear();
+  }
+
+  /**
+   * Spawns one configured hit effect once per animation frame for supported attacks.
+   */
+  playAttackHitEffect(action, hitboxConfig = null, fallbackOffsetY = 0) {
+    const effectConfig = this.characterConfig?.effects;
+    if (!effectConfig?.slashTextureKey || !effectConfig?.slashAnimation?.key) {
+      return;
+    }
+
+    if (!effectConfig.hitEffectAttacks?.includes(action)) {
+      return;
+    }
+
+    const frameIndex = this.anims.currentFrame?.index ?? null;
+    const playKey = `${action}:${frameIndex ?? 'once'}`;
+    if (this.attackEffectFramesPlayed.has(playKey)) {
+      return;
+    }
+
+    const offsetX = hitboxConfig?.offsetX ?? 0;
+    const offsetY = hitboxConfig?.offsetY ?? fallbackOffsetY;
+    const effectX = (this.body ? this.body.center.x : this.x) + (this.flipX ? -offsetX : offsetX);
+    const effectY = (this.body ? this.body.center.y : this.y) + offsetY;
+    const effectSprite = this.scene.add.sprite(effectX, effectY, effectConfig.slashTextureKey)
+      .setDepth(this.depth + 2)
+      .setAlpha(effectConfig.slashAlpha ?? 1)
+      .setScale(effectConfig.slashScale ?? 1)
+      .setFlipX(this.flipX)
+      .setAngle(this.flipX ? -(effectConfig.slashAngle ?? 0) : (effectConfig.slashAngle ?? 0));
+
+    effectSprite.once('animationcomplete', () => effectSprite.destroy());
+    effectSprite.play(effectConfig.slashAnimation.key);
+    this.attackEffectFramesPlayed.add(playKey);
   }
 
   /**
@@ -1300,6 +1338,7 @@ export default class Player extends Character {
       this.swordSwing = false;
       this.stopSurpriseDash();
       this.resetAttackAudioState();
+      this.smashStepApplied = false;
       this.thrustStepApplied = false;
       this.spinStepApplied = false;
       this.specialAttackTriggered = false;
@@ -1762,10 +1801,17 @@ export default class Player extends Character {
 
     const currentFrame = this.anims.currentFrame?.index ?? -1;
     if (this.anims.currentAnim?.key === smashKey && this.isFrameWithinActiveWindow(currentFrame, hitboxConfig.activeFrames)) {
+      if (!this.smashStepApplied) {
+        this.x += this.flipX ? -14 : 14;
+        this.smashStepApplied = true;
+      }
+
       this.swordHitBox.body.enable = true;
       this.playAttackSound(smashProfile?.sound, 'smashAttack');
+      this.playAttackHitEffect('smash', hitboxConfig, -4);
     } else {
       this.swordHitBox.body.enable = false;
+      this.smashStepApplied = false;
     }
   }
 
@@ -1797,6 +1843,7 @@ export default class Player extends Character {
       if (this.anims.currentAnim?.key === spinKey && this.isFrameWithinActiveWindow(currentFrame, hitboxConfig.activeFrames)) {
         this.spinHitBox.body.enable = true;
         this.playAttackSound(spinProfile?.sound, 'reaperSurpriseAttack');
+        this.playAttackHitEffect('spinAttack', hitboxConfig, -10);
       } else {
         this.spinHitBox.body.enable = false;
       }
@@ -1883,6 +1930,7 @@ export default class Player extends Character {
 
       this.thrustAttackHitBox.body.enable = true;
       this.playAttackSound(thrustProfile?.sound, 'thrustAttack');
+      this.playAttackHitEffect('thrust', hitboxConfig, -2);
     } else if (this.anims.currentAnim?.key === thrustKey) {
       this.thrustAttackHitBox.body.enable = false;
       this.thrustStepApplied = false;
@@ -1940,6 +1988,7 @@ export default class Player extends Character {
 
       if (this.anims.currentAnim?.key === specialAttackKey && this.isFrameWithinActiveWindow(currentFrame, hitboxConfig.activeFrames)) {
         this.specialAttackHitBox.body.enable = true;
+        this.playAttackHitEffect('specialAttack', hitboxConfig, -8);
       } else {
         this.specialAttackHitBox.body.enable = false;
       }
@@ -2057,6 +2106,7 @@ export default class Player extends Character {
     this.swordSwing = false;
     this.stopSurpriseDash();
     this.resetAttackAudioState();
+    this.smashStepApplied = false;
     this.thrustStepApplied = false;
     this.spinStepApplied = false;
     this.specialAttackTriggered = false;

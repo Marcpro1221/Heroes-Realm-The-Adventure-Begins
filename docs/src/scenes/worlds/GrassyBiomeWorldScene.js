@@ -2,7 +2,7 @@ import { SCENE_KEYS } from '../../constants/sceneKeys.js';
 import BaseWorldScene from './BaseWorldScene.js';
 
 /**
- * First grassy-biome world scene.
+ * First Sylvan Region world scene.
  */
 export default class GrassyBiomeWorldScene extends BaseWorldScene {
   constructor() {

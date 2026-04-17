@@ -20,7 +20,7 @@ export const WORLD_IDS = Object.freeze({
  * Static images used by the world and menus.
  */
 export const UI_IMAGE_ASSETS = Object.freeze({
-  menu: buildUiAssetPath('Menu', 'GameMenu2.png'),
+  menu: buildUiAssetPath('Menu', 'GameMainSceneCharacterSelection.png'),
 });
 
 export const WORLD_IMAGE_ASSETS = Object.freeze({
@@ -38,10 +38,17 @@ export const WORLD_IMAGE_ASSETS = Object.freeze({
       mediumPlatform: buildWorldAssetPath(WORLD_IDS.GRASSY_BIOME, 'Platforms', 'medium_platform.png'),
     }),
     props: Object.freeze({
-      portal: buildWorldAssetPath(WORLD_IDS.GRASSY_BIOME, 'Props', 'portal.png'),
       potionShop: buildWorldAssetPath(WORLD_IDS.GRASSY_BIOME, 'House, Shop, Interior, Exterior', 'PotionShop.png'),
     }),
   }),
+});
+
+export const WORLD_PROP_SPRITESHEETS = Object.freeze({
+  portal: {
+    path: buildWorldAssetPath(WORLD_IDS.GRASSY_BIOME, 'Props', 'portal_spritesheet.png'),
+    frameWidth: 157,
+    frameHeight: 236,
+  },
 });
 
 export const IMAGE_ASSETS = Object.freeze({

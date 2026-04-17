@@ -1,4 +1,4 @@
-import { registerEnemyAnimations, registerPlayerAnimations } from '../../assets/animations.js';
+import { registerEnemyAnimations, registerPlayerAnimations, registerWorldAnimations } from '../../assets/animations.js';
 import { areWorldSceneAssetsReady, loadMainSceneAssets } from '../../assets/loaders.js';
 import {
   ENEMY_ARCHETYPES,
@@ -69,6 +69,7 @@ export default class BaseWorldScene extends Phaser.Scene {
 
     this.playerAnimationKeys = registerPlayerAnimations(this, this.selectedCharacterConfig);
     registerEnemyAnimations(this);
+    registerWorldAnimations(this);
 
     gameState.platforms = this.physics.add.staticGroup();
     gameState.oneWayPlatforms = this.physics.add.staticGroup();
@@ -140,8 +141,11 @@ export default class BaseWorldScene extends Phaser.Scene {
 
     const portalConfig = this.sceneConfig?.props?.portal;
     if (portalConfig) {
-      gameState.portal = this.add.image(portalConfig.x, portalConfig.y, portalConfig.textureKey)
+      gameState.portal = this.add.sprite(portalConfig.x, portalConfig.y, portalConfig.textureKey)
         .setDepth(portalConfig.depth ?? 11);
+      if (this.anims.exists('world.portal.spin')) {
+        gameState.portal.play('world.portal.spin');
+      }
 
       if (portalConfig.label) {
         this.add.text(

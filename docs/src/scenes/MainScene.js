@@ -1,4 +1,4 @@
-import { registerEnemyAnimations, registerPlayerAnimations } from '../assets/animations.js';
+import { registerEnemyAnimations, registerPlayerAnimations, registerWorldAnimations } from '../assets/animations.js';
 import { loadMainSceneAssets } from '../assets/loaders.js';
 import {
   ENEMY_ARCHETYPES,
@@ -58,6 +58,7 @@ export default class MainScene extends Phaser.Scene {
 
     this.playerAnimationKeys = registerPlayerAnimations(this, this.selectedCharacterConfig);
     registerEnemyAnimations(this);
+    registerWorldAnimations(this);
 
     gameState.platforms = this.physics.add.staticGroup();
     gameState.oneWayPlatforms = this.physics.add.staticGroup();
@@ -110,7 +111,11 @@ export default class MainScene extends Phaser.Scene {
   createWorld() {
     this.createParallaxBackground();
 
-    gameState.portal = this.add.image((gameState.width / 2) - 950, gameState.height - 1100, 'portal').setDepth(11);
+    gameState.portal = this.add.sprite((gameState.width / 2) - 950, gameState.height - 1100, 'portal')
+      .setDepth(11);
+    if (this.anims.exists('world.portal.spin')) {
+      gameState.portal.play('world.portal.spin');
+    }
     this.add.text((gameState.width / 2) - 850, gameState.height - 1100, 'COMING SOON....').setDepth(12);
 
     const ground = gameState.platforms.create(PLATFORM_LAYOUT.ground.x, gameState.height - PLATFORM_LAYOUT.ground.yOffset, 'ground')

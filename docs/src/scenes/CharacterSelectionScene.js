@@ -16,6 +16,9 @@ export default class CharacterSelectionScene extends Phaser.Scene {
     this.selectionCards = new Map();
     this.playerName = '';
     this.nameInputHandler = null;
+    this.menuBackground = null;
+    this.titleText = null;
+    this.developerCreditText = null;
   }
 
   /**
@@ -42,17 +45,19 @@ export default class CharacterSelectionScene extends Phaser.Scene {
 
     registerCharacterSelectionAnimations(this);
 
-    this.add.image(0, 0, 'menu').setOrigin(0).setDepth(0);
-    this.add.text(378, 330, 'Select Your Character', {
+    this.menuBackground = this.add.image(0, 0, 'menu')
+      .setOrigin(0.5)
+      .setDepth(0);
+    this.titleText = this.add.text(0, 0, 'Select Your Character', {
       fontFamily: 'Arial',
       fontSize: '34px',
       color: '#fff7d1',
       fontStyle: 'bold',
       stroke: '#000000',
       strokeThickness: 5,
-    }).setDepth(5);
+    }).setOrigin(0.5).setDepth(5);
 
-    this.add.text(24, this.scale.height - 18, 'developer: Marc Roland Soniega', {
+    this.developerCreditText = this.add.text(24, this.scale.height - 18, 'developer: Marc Roland Soniega', {
       fontFamily: 'Arial',
       fontSize: '18px',
       color: '#ffe8a6',
@@ -97,6 +102,8 @@ export default class CharacterSelectionScene extends Phaser.Scene {
       this.createSelectionCard(character);
     });
 
+    this.layoutSelectionScene();
+
     gameState.backgroundMusic?.stop();
     gameState.backgroundMusic = this.sound.add('journey', { loop: true, volume: 0.7 });
     gameState.backgroundMusic.play();
@@ -104,6 +111,7 @@ export default class CharacterSelectionScene extends Phaser.Scene {
     this.enterKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     this.nameInputHandler = this.handleNameInput.bind(this);
     this.input.keyboard.on('keydown', this.nameInputHandler);
+    this.scale.on('resize', this.layoutSelectionScene, this);
     this.events.once('shutdown', this.cleanupSelectionScene, this);
     this.events.once('destroy', this.cleanupSelectionScene, this);
   }
@@ -116,9 +124,7 @@ export default class CharacterSelectionScene extends Phaser.Scene {
   createSelectionCard(character) {
     const previewConfig = getCharacterConfig(character.id);
     const previewHitArea = previewConfig.previewHitArea ?? { x: 60, y: 56, width: 24, height: 30 };
-    const bodyBottomY = character.previewY + ((previewHitArea.y + previewHitArea.height - 72) * character.previewScale);
-    const labelY = bodyBottomY + 18;
-    const previewSprite = this.add.sprite(character.previewX, character.previewY, previewConfig.previewTextureKey)
+    const previewSprite = this.add.sprite(0, 0, previewConfig.previewTextureKey)
       .setDepth(10)
       .setScale(character.previewScale)
       .setInteractive(
@@ -131,7 +137,7 @@ export default class CharacterSelectionScene extends Phaser.Scene {
         Phaser.Geom.Rectangle.Contains,
       );
     previewSprite.input.cursor = 'pointer';
-    const label = this.add.text(character.previewX, labelY, character.label, {
+    const label = this.add.text(0, 0, character.label, {
       fontFamily: 'Arial',
       fontSize: '18px',
       color: '#f8fafc',
@@ -142,7 +148,51 @@ export default class CharacterSelectionScene extends Phaser.Scene {
     previewSprite.play(previewConfig.previewAnimation.key);
     previewSprite.on('pointerdown', () => this.selectCharacter(character.id));
 
-    this.selectionCards.set(character.id, { previewSprite, label, previewScale: character.previewScale });
+    this.selectionCards.set(character.id, {
+      previewSprite,
+      label,
+      previewScale: character.previewScale,
+      previewHitArea,
+    });
+  }
+
+  /**
+   * Fits the menu art to the current camera and grounds each character preview
+   * against a shared baseline so the party reads as standing on the same plane.
+   */
+  layoutSelectionScene() {
+    const camera = this.cameras.main;
+    const { width, height } = camera;
+    const menuTexture = this.textures.get('menu').getSourceImage();
+    const backgroundScale = Math.min(width / menuTexture.width, height / menuTexture.height);
+
+    this.menuBackground
+      .setPosition(width / 2, height / 2)
+      .setScale(backgroundScale);
+
+    this.titleText?.setPosition(width / 2, height * 0.52);
+    this.promptText?.setPosition(width / 2, height * 0.60);
+    this.developerCreditText?.setPosition(24, height - 18);
+
+    const baseGroundY = height * 0.91;
+    const slotXPositions = [0.43, 0.56, 0.67];
+
+    PLAYABLE_CHARACTERS.forEach((character, index) => {
+      const card = this.selectionCards.get(character.id);
+      if (!card) {
+        return;
+      }
+
+      const previewX = width * (slotXPositions[index] ?? 0.5);
+      const bodyBottomOffset = (card.previewHitArea.y + card.previewHitArea.height - 72) * card.previewScale;
+      const previewY = baseGroundY - bodyBottomOffset;
+      const labelY = baseGroundY + 18;
+
+      card.previewSprite.setPosition(previewX, previewY);
+      card.label.setPosition(previewX, labelY);
+    });
+
+    this.updateNameFieldPosition();
   }
 
   /**
@@ -233,7 +283,7 @@ export default class CharacterSelectionScene extends Phaser.Scene {
       return;
     }
 
-      this.promptText.setText(`Press Enter to start as ${selectedCharacter.label}`);
+    this.promptText.setText(`Press Enter to start as ${selectedCharacter.label}`);
     this.promptText.setColor('#fff7d1');
   }
 
@@ -245,6 +295,8 @@ export default class CharacterSelectionScene extends Phaser.Scene {
       this.input.keyboard.off('keydown', this.nameInputHandler);
       this.nameInputHandler = null;
     }
+
+    this.scale.off('resize', this.layoutSelectionScene, this);
   }
 
   /**
