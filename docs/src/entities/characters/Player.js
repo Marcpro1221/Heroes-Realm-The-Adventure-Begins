@@ -51,7 +51,6 @@ export default class Player extends Character {
     this.attackSoundPlayed = false;
     this.attackSoundFramesPlayed = new Set();
     this.attackShakeFramesPlayed = new Set();
-    this.attackEffectFramesPlayed = new Set();
     this.smashStepApplied = false;
     this.thrustStepApplied = false;
     this.spinStepApplied = false;
@@ -374,42 +373,131 @@ export default class Player extends Character {
     this.attackSoundPlayed = false;
     this.attackSoundFramesPlayed.clear();
     this.attackShakeFramesPlayed.clear();
-    this.attackEffectFramesPlayed.clear();
   }
 
   /**
-   * Spawns one configured hit effect once per animation frame for supported attacks.
+   * Returns the fallback hitbox profile used to orient hit-confirmed slash effects.
    */
-  playAttackHitEffect(action, hitboxConfig = null, fallbackOffsetY = 0) {
-    const effectConfig = this.characterConfig?.effects;
-    if (!effectConfig?.slashTextureKey || !effectConfig?.slashAnimation?.key) {
-      return;
-    }
+  getDefaultAttackEffectHitbox(action) {
+    const effectDefaults = {
+      smash: {
+        width: 65,
+        height: 40,
+        offsetX: 45,
+        offsetY: 0,
+      },
+      spinAttack: {
+        width: 58,
+        height: 70,
+        offsetX: 8,
+        offsetY: -14,
+      },
+      thrust: {
+        width: 95,
+        height: 25,
+        offsetX: 35,
+        offsetY: 2,
+      },
+      specialAttack: {
+        width: PLAYER_ABILITY_SETTINGS.spaceSpikeRangeWidth,
+        height: PLAYER_ABILITY_SETTINGS.spaceSpikeRangeHeight,
+        offsetX: 0,
+        offsetY: 0,
+      },
+    };
 
-    if (!effectConfig.hitEffectAttacks?.includes(action)) {
-      return;
+    return effectDefaults[action] ?? null;
+  }
+
+  /**
+   * Resolves the current frame-specific slash effect settings for one attack.
+   */
+  getAttackHitEffectContext(action) {
+    const effectConfig = this.characterConfig?.effects;
+    if (!effectConfig?.hitEffectAttacks?.includes(action)) {
+      return null;
     }
 
     const frameIndex = this.anims.currentFrame?.index ?? null;
-    const playKey = `${action}:${frameIndex ?? 'once'}`;
-    if (this.attackEffectFramesPlayed.has(playKey)) {
+    const attackProfile = this.getCombatProfile(action);
+    const defaultHitbox = this.getDefaultAttackEffectHitbox(action);
+    const frameHitboxConfig = this.getFrameHitboxConfig(frameIndex ?? -1, attackProfile?.hitboxFrames ?? []);
+    const resolvedHitboxConfig = {
+      ...(defaultHitbox ?? {}),
+      ...(attackProfile?.hitbox ?? {}),
+      ...(frameHitboxConfig ?? {}),
+    };
+    const frameEffectConfig = this.getFrameHitboxConfig(frameIndex ?? -1, attackProfile?.effectFrames ?? []);
+    const resolvedOffsetX = frameEffectConfig?.offsetX ?? resolvedHitboxConfig.offsetX ?? 0;
+    const resolvedOffsetY = frameEffectConfig?.offsetY ?? resolvedHitboxConfig.offsetY ?? 0;
+    const sweepDirection = frameEffectConfig?.sweepDirection ?? (resolvedOffsetX < 0 ? -1 : 1);
+
+    return {
+      angle: frameEffectConfig?.slashAngle ?? effectConfig.slashAngle ?? 0,
+      alpha: frameEffectConfig?.slashAlpha ?? effectConfig.slashAlpha ?? 0.98,
+      scale: frameEffectConfig?.slashScale ?? effectConfig.slashScale ?? 1,
+      radius: frameEffectConfig?.slashRadius ?? effectConfig.slashRadius ?? 42,
+      thickness: Math.max(10, frameEffectConfig?.slashThickness ?? effectConfig.slashThickness ?? 10),
+      flatten: frameEffectConfig?.slashFlatten ?? effectConfig.slashFlatten ?? 0.72,
+      impactOffsetX: Phaser.Math.Clamp(resolvedOffsetX * 0.18, -18, 18),
+      impactOffsetY: Phaser.Math.Clamp(resolvedOffsetY * 0.28, -14, 14),
+      sweepDirection,
+      palette: effectConfig.slashPalette ?? [0xf8f6ff, 0xb8d6ff, 0x7ee6ff],
+    };
+  }
+
+  /**
+   * Draws one thin slash impact on the struck enemy after a confirmed hit.
+   */
+  playConfirmedAttackHitEffect(enemy, action) {
+    if (!enemy?.active || !this.scene) {
       return;
     }
 
-    const offsetX = hitboxConfig?.offsetX ?? 0;
-    const offsetY = hitboxConfig?.offsetY ?? fallbackOffsetY;
-    const effectX = (this.body ? this.body.center.x : this.x) + (this.flipX ? -offsetX : offsetX);
-    const effectY = (this.body ? this.body.center.y : this.y) + offsetY;
-    const effectSprite = this.scene.add.sprite(effectX, effectY, effectConfig.slashTextureKey)
-      .setDepth(this.depth + 2)
-      .setAlpha(effectConfig.slashAlpha ?? 1)
-      .setScale(effectConfig.slashScale ?? 1)
-      .setFlipX(this.flipX)
-      .setAngle(this.flipX ? -(effectConfig.slashAngle ?? 0) : (effectConfig.slashAngle ?? 0));
+    const effectContext = this.getAttackHitEffectContext(action);
+    if (!effectContext) {
+      return;
+    }
 
-    effectSprite.once('animationcomplete', () => effectSprite.destroy());
-    effectSprite.play(effectConfig.slashAnimation.key);
-    this.attackEffectFramesPlayed.add(playKey);
+    const effectX = (enemy.body ? enemy.body.center.x : enemy.x + 36) + (this.flipX ? -effectContext.impactOffsetX : effectContext.impactOffsetX);
+    const effectY = (enemy.body ? enemy.body.center.y : enemy.y + 36) + effectContext.impactOffsetY;
+    const slashEffect = this.scene.add.graphics()
+      .setDepth((enemy.depth ?? this.depth ?? 10) + 5)
+      .setPosition(effectX, effectY)
+      .setAlpha(effectContext.alpha);
+
+    const outerWidth = effectContext.thickness;
+    const midWidth = Math.max(8, effectContext.thickness * 0.86);
+    const coreWidth = Math.max(5.6, effectContext.thickness * 0.62);
+    const [outerColor, midColor, coreColor] = effectContext.palette;
+    const arcStart = effectContext.sweepDirection < 0 ? -18 : -112;
+    const arcEnd = effectContext.sweepDirection < 0 ? 112 : 18;
+    const drawArc = (radius, color, width, alpha) => {
+      slashEffect.lineStyle(width, color, alpha);
+      slashEffect.beginPath();
+      slashEffect.arc(0, 0, radius, Phaser.Math.DegToRad(arcStart), Phaser.Math.DegToRad(arcEnd), false);
+      slashEffect.strokePath();
+    };
+
+    drawArc(effectContext.radius + 4, outerColor, outerWidth, 0.62);
+    drawArc(effectContext.radius, midColor ?? outerColor, midWidth, 0.9);
+    drawArc(Math.max(10, effectContext.radius - 5), coreColor ?? midColor ?? outerColor, coreWidth, 1);
+
+    const facingRotation = this.flipX ? 180 : 0;
+    const signedScaleX = effectContext.scale * (this.flipX ? -1 : 1);
+    slashEffect.setScale(signedScaleX, effectContext.scale * effectContext.flatten);
+    slashEffect.setRotation(Phaser.Math.DegToRad(facingRotation + effectContext.angle));
+
+    this.scene.tweens.add({
+      targets: slashEffect,
+      alpha: 0,
+      scaleX: signedScaleX * 1.22,
+      scaleY: effectContext.scale * effectContext.flatten * 1.08,
+      y: effectY - 6,
+      duration: 320,
+      ease: 'Quad.easeOut',
+      onComplete: () => slashEffect.destroy(),
+    });
   }
 
   /**
@@ -1143,7 +1231,7 @@ export default class Player extends Character {
     }
 
     const dashDurationMs = dashProfile.durationMs ?? 180;
-    const dashDistance = dashProfile.distance ?? 200;
+    const dashDistance = dashProfile.distance ?? 550;
     const dashSpeed = dashProfile.speed ?? (dashDistance / Math.max(dashDurationMs / 1000, 0.001));
 
     this.isMovementDashing = true;
@@ -1808,7 +1896,6 @@ export default class Player extends Character {
 
       this.swordHitBox.body.enable = true;
       this.playAttackSound(smashProfile?.sound, 'smashAttack');
-      this.playAttackHitEffect('smash', hitboxConfig, -4);
     } else {
       this.swordHitBox.body.enable = false;
       this.smashStepApplied = false;
@@ -1843,7 +1930,6 @@ export default class Player extends Character {
       if (this.anims.currentAnim?.key === spinKey && this.isFrameWithinActiveWindow(currentFrame, hitboxConfig.activeFrames)) {
         this.spinHitBox.body.enable = true;
         this.playAttackSound(spinProfile?.sound, 'reaperSurpriseAttack');
-        this.playAttackHitEffect('spinAttack', hitboxConfig, -10);
       } else {
         this.spinHitBox.body.enable = false;
       }
@@ -1930,7 +2016,6 @@ export default class Player extends Character {
 
       this.thrustAttackHitBox.body.enable = true;
       this.playAttackSound(thrustProfile?.sound, 'thrustAttack');
-      this.playAttackHitEffect('thrust', hitboxConfig, -2);
     } else if (this.anims.currentAnim?.key === thrustKey) {
       this.thrustAttackHitBox.body.enable = false;
       this.thrustStepApplied = false;
@@ -1988,7 +2073,6 @@ export default class Player extends Character {
 
       if (this.anims.currentAnim?.key === specialAttackKey && this.isFrameWithinActiveWindow(currentFrame, hitboxConfig.activeFrames)) {
         this.specialAttackHitBox.body.enable = true;
-        this.playAttackHitEffect('specialAttack', hitboxConfig, -8);
       } else {
         this.specialAttackHitBox.body.enable = false;
       }

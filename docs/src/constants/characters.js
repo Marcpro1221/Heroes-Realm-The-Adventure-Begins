@@ -53,6 +53,14 @@ export const CHARACTER_CONFIGS = Object.freeze({
     effects: {
       spaceSpikesTextureKey: 'luneblace.spaceSpikes',
       spaceSpikesAnimation: { key: 'luneblace.spaceSpikesBurst', start: 0, end: 11, frameRate: 28 },
+      hitEffectAttacks: ['smash', 'thrust'],
+      slashPalette: [0x0d1320, 0x4d95ff, 0x4dffba],
+      slashScale: 0.98,
+      slashAlpha: 1,
+      slashAngle: 18,
+      slashRadius: 42,
+      slashThickness: 10.2,
+      slashFlatten: 0.72,
     },
     combatProfile: {
       smash: {
@@ -64,6 +72,11 @@ export const CHARACTER_CONFIGS = Object.freeze({
           offsetY: 0,
           activeFrames: [{ start: 11, end: 13 }],
         },
+        effectFrames: [
+          { start: 11, end: 11, slashAngle: 22, sweepDirection: 1 },
+          { start: 12, end: 12, slashAngle: 10, sweepDirection: 1 },
+          { start: 13, end: 13, slashAngle: -8, sweepDirection: -1 },
+        ],
       },
       thrust: {
         damagePercentBonusMin: 0.13,
@@ -76,6 +89,9 @@ export const CHARACTER_CONFIGS = Object.freeze({
           offsetY: 2,
           activeFrames: [{ start: 1, end: 1 }],
         },
+        effectFrames: [
+          { start: 1, end: 1, slashAngle: 4, sweepDirection: 1, slashRadius: 36 },
+        ],
       },
       specialAttack: {
         mode: 'burst',
@@ -150,14 +166,18 @@ export const CHARACTER_CONFIGS = Object.freeze({
       slashTextureKey: 'reaper.slashEffect',
       slashAnimation: { key: 'reaper.slashEffect', start: 0, end: 9, frameRate: 24 },
       hitEffectAttacks: ['smash', 'thrust', 'spinAttack', 'specialAttack'],
-      slashScale: 1.08,
-      slashAlpha: 0.94,
+      slashPalette: [0xffffff, 0xd7b8ff, 0x8b4dff],
+      slashScale: 1.02,
+      slashAlpha: 1,
       slashAngle: 22,
+      slashRadius: 44,
+      slashThickness: 10.4,
+      slashFlatten: 0.74,
     },
     movementProfile: {
       dash: {
         durationMs: 180,
-        distance: 500,
+        distance: 550,
         manaCost: 15,
         doubleTapWindowMs: 220,
       },
@@ -177,6 +197,10 @@ export const CHARACTER_CONFIGS = Object.freeze({
             { start: 9, end: 10 },
           ],
         },
+        effectFrames: [
+          { start: 3, end: 4, slashAngle: 30, sweepDirection: 1 },
+          { start: 9, end: 10, slashAngle: -28, sweepDirection: -1 },
+        ],
       },
       thrust: {
         damagePercentBonusMin: 0.13,
@@ -189,6 +213,9 @@ export const CHARACTER_CONFIGS = Object.freeze({
           offsetY: 0,
           activeFrames: [{ start: 5, end: 6 }],
         },
+        effectFrames: [
+          { start: 5, end: 6, slashAngle: 8, sweepDirection: 1, slashRadius: 38 },
+        ],
       },
       specialAttack: {
         mode: 'melee',
@@ -207,6 +234,9 @@ export const CHARACTER_CONFIGS = Object.freeze({
           offsetY: -14,
           activeFrames: [{ start: 13, end: 17 }],
         },
+        effectFrames: [
+          { start: 13, end: 17, slashAngle: 14, sweepDirection: 1, slashRadius: 52, slashScale: 1.12 },
+        ],
         uiLabels: {
           manaCost: '10 HP',
           range: 'Melee',
@@ -230,6 +260,10 @@ export const CHARACTER_CONFIGS = Object.freeze({
           offsetY: -2,
           activeFrames: [{ start: 3, end: 6 }],
         },
+        effectFrames: [
+          { start: 3, end: 4, slashAngle: 72, sweepDirection: 1, slashRadius: 40 },
+          { start: 5, end: 6, slashAngle: -66, sweepDirection: -1, slashRadius: 40 },
+        ],
       },
     },
   },
@@ -285,9 +319,13 @@ export const CHARACTER_CONFIGS = Object.freeze({
       slashTextureKey: 'bladedStaff.slashEffect',
       slashAnimation: { key: 'bladedStaff.slashEffect', start: 0, end: 9, frameRate: 24 },
       hitEffectAttacks: ['smash', 'thrust', 'specialAttack'],
-      slashScale: 1.1,
-      slashAlpha: 0.92,
+      slashPalette: [0xfffdf0, 0xffda6b, 0xff8c32],
+      slashScale: 1.04,
+      slashAlpha: 0.98,
       slashAngle: 16,
+      slashRadius: 44,
+      slashThickness: 10.3,
+      slashFlatten: 0.72,
     },
     animationFrameRates: {
       dash: 16,
@@ -300,7 +338,7 @@ export const CHARACTER_CONFIGS = Object.freeze({
     movementProfile: {
       dash: {
         durationMs: 170,
-        distance: 500,
+        distance: 550,
         manaCost: 15,
         doubleTapWindowMs: 220,
       },
@@ -320,6 +358,10 @@ export const CHARACTER_CONFIGS = Object.freeze({
             { start: 10, end: 10 },
           ],
         },
+        effectFrames: [
+          { start: 4, end: 4, slashAngle: 24, sweepDirection: 1 },
+          { start: 10, end: 10, slashAngle: -24, sweepDirection: -1 },
+        ],
       },
       thrust: {
         damagePercentBonusMin: 0.12,
@@ -331,6 +373,9 @@ export const CHARACTER_CONFIGS = Object.freeze({
           offsetY: -2,
           activeFrames: [{ start: 5, end: 5 }],
         },
+        effectFrames: [
+          { start: 5, end: 5, slashAngle: 6, sweepDirection: 1, slashRadius: 38 },
+        ],
       },
       spinAttack: {
         mode: 'smokeAmbush',
@@ -445,6 +490,16 @@ export const CHARACTER_CONFIGS = Object.freeze({
             offsetY: -8,
             activeFrames: [{ start: 35, end: 35 }],
           },
+        ],
+        effectFrames: [
+          { start: 18, end: 18, slashAngle: 18, sweepDirection: 1, slashRadius: 50, slashScale: 1.08 },
+          { start: 21, end: 21, slashAngle: -18, sweepDirection: -1, slashRadius: 50, slashScale: 1.08 },
+          { start: 24, end: 24, slashAngle: 22, sweepDirection: 1, slashRadius: 52, slashScale: 1.1 },
+          { start: 27, end: 27, slashAngle: -22, sweepDirection: -1, slashRadius: 52, slashScale: 1.1 },
+          { start: 30, end: 30, slashAngle: 0, sweepDirection: 1, slashRadius: 56, slashScale: 1.14 },
+          { start: 32, end: 32, slashAngle: 20, sweepDirection: 1, slashRadius: 54, slashScale: 1.1 },
+          { start: 34, end: 34, slashAngle: -20, sweepDirection: -1, slashRadius: 54, slashScale: 1.1 },
+          { start: 35, end: 35, slashAngle: 0, sweepDirection: -1, slashRadius: 56, slashScale: 1.14 },
         ],
       },
       surpriseJump: {

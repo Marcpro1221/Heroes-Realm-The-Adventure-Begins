@@ -4,7 +4,6 @@ import {
   ENEMY_TYPES,
   PLAYER_PROGRESS_SETTINGS,
 } from '../constants/gameConstants.js';
-import { CHARACTER_IDS } from '../constants/characters.js';
 import { gameState } from '../state/gameState.js';
 import Enemy from '../entities/characters/Enemy.js';
 
@@ -260,35 +259,11 @@ export default class EnemyManager {
    */
   spawnPlayerHitEffect(enemy, attackType) {
     const player = gameState.player;
-    const effectConfig = player?.characterConfig?.effects;
-    if (!player?.scene || !effectConfig?.slashTextureKey || !effectConfig?.slashAnimation?.key) {
+    if (!player?.playConfirmedAttackHitEffect) {
       return;
     }
 
-    const allowedAttacks = effectConfig.hitEffectAttacks ?? (
-      player.characterConfig?.id === CHARACTER_IDS.BLADED_STAFF ? ['smash', 'thrust', 'specialAttack'] : []
-    );
-    if (allowedAttacks.length && !allowedAttacks.includes(attackType)) {
-      return;
-    }
-
-    const slashAnimationKey = effectConfig.slashAnimation.key;
-    if (!slashAnimationKey || !this.scene.anims.exists(slashAnimationKey)) {
-      return;
-    }
-
-    const effectX = enemy.body ? enemy.body.center.x : enemy.x + 36;
-    const effectY = enemy.body ? enemy.body.center.y : enemy.y + 36;
-    const slashEffect = this.scene.add.sprite(effectX, effectY, effectConfig.slashTextureKey);
-    slashEffect
-      .setDepth((enemy.depth ?? 10) + 5)
-      .setScale(effectConfig.slashScale ?? 1.1)
-      .setAlpha(effectConfig.slashAlpha ?? 0.92)
-      .setFlipX(!player.flipX)
-      .setAngle(player.flipX ? (effectConfig.slashAngle ?? 16) : -(effectConfig.slashAngle ?? 16))
-      .play(slashAnimationKey);
-
-    slashEffect.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => slashEffect.destroy());
+    player.playConfirmedAttackHitEffect(enemy, attackType);
   }
 
   /**
