@@ -21,6 +21,8 @@ export const WORLD_IDS = Object.freeze({
  */
 export const UI_IMAGE_ASSETS = Object.freeze({
   menu: buildUiAssetPath('Menu', 'GameMainSceneCharacterSelection.png'),
+  coinDrop: buildUiAssetPath('Icons', 'coin-drop.svg'),
+  inventoryButtonIcon: buildUiAssetPath('Icons', 'inventory-button.svg'),
 });
 
 export const WORLD_IMAGE_ASSETS = Object.freeze({

@@ -99,12 +99,12 @@ export default class Enemy extends Character {
   /**
    * Applies horizontal and optional vertical knockback.
    */
-  applyKnockback(knockbackVelocityX, knockbackVelocityY) {
+  applyKnockback(knockbackVelocityX, knockbackVelocityY, knockbackVelocityClampX = 420) {
     const sameDirection = Math.sign(this.knockbackVelocityX) === Math.sign(knockbackVelocityX);
     const nextKnockbackVelocityX = sameDirection
       ? this.knockbackVelocityX + knockbackVelocityX
       : knockbackVelocityX;
-    this.knockbackVelocityX = Phaser.Math.Clamp(nextKnockbackVelocityX, -420, 420);
+    this.knockbackVelocityX = Phaser.Math.Clamp(nextKnockbackVelocityX, -knockbackVelocityClampX, knockbackVelocityClampX);
 
     if (typeof knockbackVelocityY === 'number') {
       const nextKnockbackVelocityY = Math.min(this.body?.velocity?.y ?? 0, knockbackVelocityY);

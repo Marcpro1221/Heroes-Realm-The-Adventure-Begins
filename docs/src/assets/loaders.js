@@ -65,6 +65,8 @@ export const loadMainSceneAssets = (scene, worldAssetId = null) => {
   const currentWorldAssets = WORLD_IMAGE_ASSETS[resolvedWorldAssetId] ?? WORLD_IMAGE_ASSETS[WORLD_IDS.GRASSY_BIOME];
 
   loadImages(scene, {
+    coinDrop: UI_IMAGE_ASSETS.coinDrop,
+    inventoryButtonIcon: UI_IMAGE_ASSETS.inventoryButtonIcon,
     ...currentWorldAssets.backgrounds,
     ...currentWorldAssets.platforms,
     ...currentWorldAssets.props,

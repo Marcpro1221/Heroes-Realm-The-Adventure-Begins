@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <defs>
+    <linearGradient id="bagBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#d7b26a"/>
+      <stop offset="100%" stop-color="#8a5c1a"/>
+    </linearGradient>
+    <linearGradient id="bagMetal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d7f7ff"/>
+      <stop offset="100%" stop-color="#5cb9df"/>
+    </linearGradient>
+  </defs>
+  <path d="M15 14c0-5.2 4-9 9-9s9 3.8 9 9h-4c0-2.9-2.1-5-5-5s-5 2.1-5 5z" fill="none" stroke="url(#bagMetal)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M10 17h28l-2.5 22c-.2 2.3-2.1 4-4.4 4H17c-2.3 0-4.2-1.7-4.4-4z" fill="url(#bagBody)" stroke="#f6de9d" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M14 21h20" stroke="#6b4310" stroke-width="2" opacity=".8"/>
+  <circle cx="18" cy="26" r="2.1" fill="#f9efc7"/>
+  <circle cx="30" cy="26" r="2.1" fill="#f9efc7"/>
+  <rect x="17" y="29" width="14" height="9" rx="2" fill="#6a4112" opacity=".82"/>
+  <path d="M20 33h8" stroke="#ffd86a" stroke-width="2" stroke-linecap="round"/>
+</svg>

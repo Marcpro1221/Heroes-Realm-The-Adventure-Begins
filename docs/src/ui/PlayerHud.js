@@ -16,6 +16,15 @@ export default class PlayerHud {
     this.controlsTween = null;
     this.controlRows = {};
     this.controlsOverlayElements = [];
+    this.inventoryOpen = false;
+    this.inventoryOverlayElements = [];
+    this.draggableInventoryElements = [];
+    this.inventorySlotElements = [];
+    this.inventoryItems = [];
+    this.selectedInventorySlotElement = null;
+    this.inventoryPanelBounds = null;
+    this.inventoryPanelOrigin = null;
+    this.inventoryDragState = null;
     this.build();
   }
 
@@ -23,6 +32,8 @@ export default class PlayerHud {
    * Creates the HUD game objects and pins them to the camera.
    */
   build() {
+    const viewportWidth = this.scene.cameras.main.width;
+    const viewportHeight = this.scene.cameras.main.height;
     const hudX = 24;
     const hudY = 18;
     const barWidth = 150;
@@ -33,6 +44,31 @@ export default class PlayerHud {
     const overlayOpenY = this.scene.scale.height - overlayHeight - 86;
     const overlayOffsetY = 30;
     const toggleY = this.scene.scale.height - 56;
+    const inventoryButtonWidth = 52;
+    const inventoryButtonHeight = 52;
+    const inventoryButtonX = viewportWidth - inventoryButtonWidth - 24;
+    const inventoryButtonY = 18;
+    const inventoryTotalSlots = 20;
+    const inventoryColumns = 3;
+    const inventoryRows = Math.ceil(inventoryTotalSlots / inventoryColumns);
+    const inventorySlotGap = 6;
+    const inventoryPaddingX = 20;
+    const inventoryPaddingY = 18;
+    const inventoryHeaderHeight = 42;
+    const inventoryDetailGap = 18;
+    const inventoryDetailWidth = 160;
+    const inventoryPanelHeight = Math.round(viewportHeight * 0.6);
+    const inventoryGridHeight = inventoryPanelHeight - inventoryHeaderHeight - (inventoryPaddingY * 2);
+    const inventorySlotSize = Math.max(1, Math.floor(
+      (inventoryGridHeight - ((inventoryRows - 1) * inventorySlotGap)) / inventoryRows,
+    ));
+    const inventoryPanelWidth = (inventoryColumns * inventorySlotSize)
+      + ((inventoryColumns - 1) * inventorySlotGap)
+      + inventoryDetailGap
+      + inventoryDetailWidth
+      + (inventoryPaddingX * 2);
+    const inventoryPanelX = Math.round((viewportWidth - inventoryPanelWidth) / 2);
+    const inventoryPanelY = Math.round((viewportHeight - inventoryPanelHeight) / 2);
     const abyssBlue = 0x08111f;
     const abyssBlueRaised = 0x10233c;
     const abyssLine = 0x1f4f75;
@@ -42,6 +78,7 @@ export default class PlayerHud {
       fontSize: '14px',
       color: '#b7d8f3',
     };
+    const coinHudY = hudY + 144;
 
     this.elements = {
       panelShadow: this.scene.add.rectangle(hudX + 4, hudY + 6, 238, 132, 0x02050b, 0.45).setOrigin(0, 0),
@@ -67,7 +104,15 @@ export default class PlayerHud {
       manaBarBg: this.scene.add.rectangle(hudX + 72, hudY + 106, barWidth, barHeight, 0x071522).setOrigin(0, 0.5),
       manaBarFill: this.scene.add.rectangle(hudX + 72, hudY + 106, barWidth, barHeight, 0x3b82f6).setOrigin(0, 0.5),
       manaValueText: this.scene.add.text(hudX + 72 + barWidth - 8, hudY + 95, '', { fontFamily: 'Arial', fontSize: '13px', color: '#e8f3fb' }).setOrigin(1, 0),
-      fpsText: this.scene.add.text(hudX, hudY + 144, 'FPS: 0', { fontFamily: 'Arial', fontSize: '13px', color: '#ffffff' }),
+      fpsText: this.scene.add.text(hudX, coinHudY, 'FPS: 0', { fontFamily: 'Arial', fontSize: '13px', color: '#ffffff' }),
+      coinIcon: this.scene.add.image(hudX + 76, coinHudY + 10, 'coinDrop').setOrigin(0, 0.5).setDisplaySize(20, 20),
+      coinText: this.scene.add.text(hudX + 102, coinHudY, 'Coins: 0', { fontFamily: 'Arial', fontSize: '13px', color: '#ffd85a', fontStyle: 'bold' }),
+      inventoryButtonShadow: this.scene.add.rectangle(inventoryButtonX + 3, inventoryButtonY + 4, inventoryButtonWidth, inventoryButtonHeight, 0x02050b, 0.42).setOrigin(0, 0),
+      inventoryButton: this.scene.add.rectangle(inventoryButtonX, inventoryButtonY, inventoryButtonWidth, inventoryButtonHeight, abyssBlueRaised, 0.92).setOrigin(0, 0),
+      inventoryButtonBorder: this.scene.add.rectangle(inventoryButtonX, inventoryButtonY, inventoryButtonWidth, inventoryButtonHeight).setOrigin(0, 0).setStrokeStyle(1.5, abyssGlow, 0.52),
+      inventoryButtonLabel: this.scene.add.image(inventoryButtonX + (inventoryButtonWidth / 2), inventoryButtonY + (inventoryButtonHeight / 2), 'inventoryButtonIcon')
+        .setDisplaySize(32, 32)
+        .setOrigin(0.5),
       controlsToggleShadow: this.scene.add.rectangle(overlayX + 3, toggleY + 4, 146, 34, 0x02050b, 0.42).setOrigin(0, 0),
       controlsToggleButton: this.scene.add.rectangle(overlayX, toggleY, 146, 34, abyssBlueRaised, 0.82).setOrigin(0, 0),
       controlsToggleBorder: this.scene.add.rectangle(overlayX, toggleY, 146, 34).setOrigin(0, 0).setStrokeStyle(1.5, abyssGlow, 0.52),
@@ -86,7 +131,7 @@ export default class PlayerHud {
         color: '#f2fbff',
         fontStyle: 'bold',
       }),
-      controlsPanelHint: this.scene.add.text(overlayX + 18, overlayOpenY + 38, 'Click the label or anywhere on the screen to close.', {
+      controlsPanelHint: this.scene.add.text(overlayX + 18, overlayOpenY + 38, 'Press E to pick up nearby drops. Click the label or screen to close.', {
         fontFamily: 'Arial',
         fontSize: '12px',
         color: '#9fdcf8',
@@ -96,6 +141,25 @@ export default class PlayerHud {
       controlsHeaderKey: this.scene.add.text(overlayX + 104, overlayOpenY + 76, 'Key', this.getOverlayHeaderStyle()),
       controlsHeaderAction: this.scene.add.text(overlayX + 156, overlayOpenY + 76, 'Action', this.getOverlayHeaderStyle()),
       controlsHeaderCost: this.scene.add.text(overlayX + 320, overlayOpenY + 76, 'Details', this.getOverlayHeaderStyle()),
+      inventoryOverlay: this.scene.add.rectangle(0, 0, viewportWidth, viewportHeight, 0x02050b, 0.32).setOrigin(0, 0),
+      inventoryPanelShadow: this.scene.add.rectangle(inventoryPanelX + 8, inventoryPanelY + 10, inventoryPanelWidth, inventoryPanelHeight, 0x010308, 0.4).setOrigin(0, 0),
+      inventoryPanel: this.scene.add.rectangle(inventoryPanelX, inventoryPanelY, inventoryPanelWidth, inventoryPanelHeight, abyssBlue, 0.96).setOrigin(0, 0),
+      inventoryPanelBorder: this.scene.add.rectangle(inventoryPanelX, inventoryPanelY, inventoryPanelWidth, inventoryPanelHeight).setOrigin(0, 0).setStrokeStyle(2, abyssLine, 0.85),
+      inventoryHeader: this.scene.add.rectangle(inventoryPanelX, inventoryPanelY, inventoryPanelWidth, inventoryHeaderHeight, abyssBlueRaised, 0.94).setOrigin(0, 0),
+      inventoryHeaderGlow: this.scene.add.rectangle(inventoryPanelX + 1, inventoryPanelY + 1, inventoryPanelWidth - 2, 4, abyssGlow, 0.18).setOrigin(0, 0),
+      inventoryTitle: this.scene.add.text(inventoryPanelX + 20, inventoryPanelY + 10, 'Inventory', {
+        fontFamily: 'Arial',
+        fontSize: '20px',
+        color: '#e7f6ff',
+        fontStyle: 'bold',
+      }),
+      inventoryCloseButton: this.scene.add.rectangle(inventoryPanelX + inventoryPanelWidth - 34, inventoryPanelY + 21, 28, 28, 0x48181d, 0.94).setOrigin(0.5),
+      inventoryCloseLabel: this.scene.add.text(inventoryPanelX + inventoryPanelWidth - 34, inventoryPanelY + 21, 'X', {
+        fontFamily: 'Arial',
+        fontSize: '15px',
+        color: '#f8fbff',
+        fontStyle: 'bold',
+      }).setOrigin(0.5),
     };
 
     this.createControlRow('move', overlayX, overlayOpenY + 104, '#d7f1ff');
@@ -128,17 +192,45 @@ export default class PlayerHud {
     });
 
     [
+      this.elements.inventoryButton,
+      this.elements.inventoryButtonBorder,
+      this.elements.inventoryButtonLabel,
       this.elements.controlsToggleButton,
       this.elements.controlsToggleBorder,
       this.elements.controlsToggleLabel,
     ].forEach((element) => {
       element.setInteractive({ useHandCursor: true });
+    });
+    [
+      this.elements.inventoryButton,
+      this.elements.inventoryButtonBorder,
+      this.elements.inventoryButtonLabel,
+    ].forEach((element) => {
+      element.on('pointerdown', () => this.toggleInventory());
+    });
+    [
+      this.elements.controlsToggleButton,
+      this.elements.controlsToggleBorder,
+      this.elements.controlsToggleLabel,
+    ].forEach((element) => {
       element.on('pointerdown', () => this.toggleControls());
     });
 
+    this.buildInventoryGrid(inventoryPanelX, inventoryPanelY, inventoryPanelWidth, inventoryPanelHeight, inventoryHeaderHeight);
+    this.cacheInventoryLayout(inventoryPanelX, inventoryPanelY, inventoryPanelWidth, inventoryPanelHeight);
+    this.enableInventoryDragging();
+
     this.elements.headerButton.setInteractive({ useHandCursor: true });
     this.elements.profileHintText.setInteractive({ useHandCursor: true });
+    [
+      this.elements.inventoryCloseButton,
+      this.elements.inventoryCloseLabel,
+    ].forEach((element) => {
+      element.setInteractive({ useHandCursor: true });
+      element.on('pointerdown', () => this.closeInventory());
+    });
     this.setControlsOpen(false, true);
+    this.setInventoryOpen(false);
   }
 
   /**
@@ -206,6 +298,248 @@ export default class PlayerHud {
   }
 
   /**
+   * Pins and hides one inventory element until the panel opens.
+   */
+  registerInventoryElement(element, depth = 220) {
+    this.pinHudElement(element, depth);
+    element.setVisible(false);
+    this.inventoryOverlayElements.push(element);
+    if (element !== this.elements.inventoryOverlay) {
+      this.draggableInventoryElements.push(element);
+    }
+  }
+
+  cacheInventoryLayout(originX, originY, panelWidth, panelHeight) {
+    this.inventoryPanelOrigin = { x: originX, y: originY };
+    this.inventoryPanelBounds = new Phaser.Geom.Rectangle(originX, originY, panelWidth, panelHeight);
+    this.draggableInventoryElements.forEach((element) => {
+      if (typeof element.x === 'number') {
+        element.setData('inventoryOffsetX', element.x - originX);
+      }
+      if (typeof element.y === 'number') {
+        element.setData('inventoryOffsetY', element.y - originY);
+      }
+    });
+  }
+
+  enableInventoryDragging() {
+    [
+      this.elements.inventoryHeader,
+      this.elements.inventoryHeaderGlow,
+      this.elements.inventoryTitle,
+    ].forEach((element) => {
+      element.setInteractive({ useHandCursor: true, draggable: false });
+      element.on('pointerdown', (pointer) => this.beginInventoryDrag(pointer));
+    });
+
+    this.scene.input.on('pointermove', this.handleInventoryDragMove, this);
+    this.scene.input.on('pointerup', this.endInventoryDrag, this);
+  }
+
+  beginInventoryDrag(pointer) {
+    if (!this.inventoryOpen || !this.inventoryPanelBounds) {
+      return;
+    }
+
+    this.inventoryDragState = {
+      pointerId: pointer.id,
+      offsetX: pointer.x - this.inventoryPanelBounds.x,
+      offsetY: pointer.y - this.inventoryPanelBounds.y,
+    };
+  }
+
+  handleInventoryDragMove(pointer) {
+    if (!this.inventoryDragState || pointer.id !== this.inventoryDragState.pointerId) {
+      return;
+    }
+
+    const maxX = Math.max(0, this.scene.scale.width - this.inventoryPanelBounds.width);
+    const maxY = Math.max(0, this.scene.scale.height - this.inventoryPanelBounds.height);
+    const nextX = Phaser.Math.Clamp(pointer.x - this.inventoryDragState.offsetX, 0, maxX);
+    const nextY = Phaser.Math.Clamp(pointer.y - this.inventoryDragState.offsetY, 0, maxY);
+    this.setInventoryPosition(nextX, nextY);
+  }
+
+  endInventoryDrag(pointer) {
+    if (!this.inventoryDragState) {
+      return;
+    }
+
+    if (!pointer || pointer.id === this.inventoryDragState.pointerId) {
+      this.inventoryDragState = null;
+    }
+  }
+
+  setInventoryPosition(panelX, panelY) {
+    if (!this.inventoryPanelBounds) {
+      return;
+    }
+
+    this.inventoryPanelBounds.x = panelX;
+    this.inventoryPanelBounds.y = panelY;
+    this.draggableInventoryElements.forEach((element) => {
+      const offsetX = element.getData('inventoryOffsetX');
+      const offsetY = element.getData('inventoryOffsetY');
+      if (typeof offsetX === 'number' && typeof offsetY === 'number' && element.setPosition) {
+        element.setPosition(panelX + offsetX, panelY + offsetY);
+      }
+    });
+  }
+
+  /**
+   * Creates the inventory grid inside the camera-pinned panel.
+   */
+  buildInventoryGrid(panelX, panelY, panelWidth, panelHeight, headerHeight) {
+    const totalSlots = 20;
+    const columns = 3;
+    const rows = Math.ceil(totalSlots / columns);
+    const paddingX = 20;
+    const paddingY = 18;
+    const slotGap = 6;
+    const detailGap = 18;
+    const detailWidth = 160;
+    const detailX = panelX + panelWidth - paddingX - detailWidth;
+    const detailY = panelY + headerHeight + paddingY;
+    const gridWidth = Math.max(1, panelWidth - (paddingX * 2) - detailGap - detailWidth);
+    const gridHeight = Math.max(1, panelHeight - headerHeight - (paddingY * 2));
+    const columnGap = columns > 1
+      ? Math.min(slotGap, Math.max(0, Math.floor((gridWidth - columns) / (columns - 1))))
+      : 0;
+    const rowGap = rows > 1
+      ? Math.min(slotGap, Math.max(0, Math.floor((gridHeight - rows) / (rows - 1))))
+      : 0;
+    const maxSlotWidth = Math.floor((gridWidth - (columnGap * (columns - 1))) / columns);
+    const maxSlotHeight = Math.floor((gridHeight - (rowGap * (rows - 1))) / rows);
+    const slotSize = Math.max(1, Math.min(maxSlotWidth, maxSlotHeight));
+    const usedGridWidth = (columns * slotSize) + ((columns - 1) * columnGap);
+    const usedGridHeight = (rows * slotSize) + ((rows - 1) * rowGap);
+    const gridX = panelX + paddingX + Math.floor((gridWidth - usedGridWidth) / 2);
+    const gridY = panelY + headerHeight + paddingY + Math.floor((gridHeight - usedGridHeight) / 2);
+    const detailPanelHeight = Math.min(250, gridHeight);
+
+    this.elements.inventoryDetailPanel = this.scene.add.rectangle(detailX, detailY, detailWidth, detailPanelHeight, 0x06101c, 0.88)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1.2, 0x4bc3ff, 0.28);
+    this.elements.inventoryDetailTitle = this.scene.add.text(detailX + 12, detailY + 10, 'Selected Item', {
+      fontFamily: 'Arial',
+      fontSize: '14px',
+      color: '#9fdcf8',
+      fontStyle: 'bold',
+    });
+    this.elements.inventoryItemImageBg = this.scene.add.rectangle(detailX + (detailWidth / 2), detailY + 76, 78, 78, 0x071522, 0.96)
+      .setOrigin(0.5)
+      .setStrokeStyle(1.2, 0x4bc3ff, 0.34);
+    this.elements.inventoryItemImage = this.scene.add.image(detailX + (detailWidth / 2), detailY + 76, '__MISSING')
+      .setOrigin(0.5)
+      .setDisplaySize(64, 64)
+      .setAlpha(0);
+    this.elements.inventoryItemFallbackLabel = this.scene.add.text(detailX + (detailWidth / 2), detailY + 60, '?', {
+      fontFamily: 'Arial',
+      fontSize: '32px',
+      color: '#4bc3ff',
+      fontStyle: 'bold',
+    }).setOrigin(0.5, 0);
+    this.elements.inventoryItemNameLabel = this.scene.add.text(detailX + (detailWidth / 2), detailY + 124, 'Click a slot', {
+      fontFamily: 'Arial',
+      fontSize: '13px',
+      color: '#e7f6ff',
+      fontStyle: 'bold',
+      align: 'center',
+      wordWrap: { width: detailWidth - 24 },
+    }).setOrigin(0.5, 0);
+    this.elements.inventoryItemDescriptionLabel = this.scene.add.text(detailX + 12, detailY + 154, 'Select an item to view its description.', {
+      fontFamily: 'Arial',
+      fontSize: '12px',
+      color: '#9fdcf8',
+      lineSpacing: 3,
+      wordWrap: { width: detailWidth - 24 },
+    });
+
+    [
+      this.elements.inventoryOverlay,
+      this.elements.inventoryPanelShadow,
+      this.elements.inventoryPanel,
+      this.elements.inventoryPanelBorder,
+      this.elements.inventoryHeader,
+      this.elements.inventoryHeaderGlow,
+      this.elements.inventoryTitle,
+      this.elements.inventoryCloseButton,
+      this.elements.inventoryCloseLabel,
+      this.elements.inventoryDetailPanel,
+      this.elements.inventoryDetailTitle,
+      this.elements.inventoryItemImageBg,
+      this.elements.inventoryItemImage,
+      this.elements.inventoryItemFallbackLabel,
+      this.elements.inventoryItemNameLabel,
+      this.elements.inventoryItemDescriptionLabel,
+    ].forEach((element, index) => {
+      this.registerInventoryElement(element, 220 + index);
+    });
+
+    for (let slotIndex = 0; slotIndex < totalSlots; slotIndex += 1) {
+      const row = Math.floor(slotIndex / columns);
+      const column = slotIndex % columns;
+      const x = gridX + (column * (slotSize + columnGap));
+      const y = gridY + (row * (slotSize + rowGap));
+      const slot = this.scene.add.rectangle(x, y, slotSize, slotSize, 0x071522, 0.95)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1.2, 0x4bc3ff, 0.3)
+        .setInteractive({ useHandCursor: true });
+
+      slot.on('pointerover', () => {
+        slot.setFillStyle(0x12314f, 0.98);
+        slot.setStrokeStyle(1.2, 0x84dcff, 0.72);
+      });
+      slot.on('pointerout', () => {
+        if (slot !== this.selectedInventorySlotElement) {
+          slot.setFillStyle(0x071522, 0.95);
+          slot.setStrokeStyle(1.2, 0x4bc3ff, 0.3);
+        }
+      });
+      slot.on('pointerdown', () => this.selectInventorySlot(slotIndex));
+
+      this.inventorySlotElements.push(slot);
+      this.registerInventoryElement(slot, 229);
+    }
+  }
+
+  /**
+   * Shows the clicked inventory slot's item preview on the right side panel.
+   */
+  selectInventorySlot(slotIndex) {
+    const selectedSlot = this.inventorySlotElements[slotIndex];
+    const item = this.inventoryItems[slotIndex] ?? null;
+
+    if (this.selectedInventorySlotElement && this.selectedInventorySlotElement !== selectedSlot) {
+      this.selectedInventorySlotElement.setFillStyle(0x071522, 0.95);
+      this.selectedInventorySlotElement.setStrokeStyle(1.2, 0x4bc3ff, 0.3);
+    }
+
+    this.selectedInventorySlotElement = selectedSlot ?? null;
+
+    if (selectedSlot) {
+      selectedSlot.setFillStyle(0x173a5c, 0.98);
+      selectedSlot.setStrokeStyle(1.4, 0x9fe8ff, 0.86);
+    }
+
+    const itemName = item?.name ?? `Empty Slot ${slotIndex + 1}`;
+    const itemDescription = item?.description ?? 'No item description available.';
+    const textureKey = item?.textureKey ?? null;
+    const hasTexture = Boolean(textureKey && this.scene.textures.exists(textureKey));
+
+    this.elements.inventoryItemNameLabel.setText(itemName);
+    this.elements.inventoryItemDescriptionLabel.setText(itemDescription);
+    this.elements.inventoryDetailTitle.setText(item ? 'Selected Item' : 'Empty Slot');
+    this.elements.inventoryItemImage.setAlpha(hasTexture ? 1 : 0);
+    this.elements.inventoryItemFallbackLabel.setAlpha(hasTexture ? 0 : 1);
+
+    if (hasTexture) {
+      this.elements.inventoryItemImage.setTexture(textureKey);
+      this.elements.inventoryItemImage.setDisplaySize(64, 64);
+    }
+  }
+
+  /**
    * Hooks HUD interactions to scene callbacks.
    */
   bindEvents(onToggleProfile) {
@@ -219,6 +553,22 @@ export default class PlayerHud {
   handlePointerDown(pointer) {
     if (this.containsPoint(this.elements.controlsToggleButton, pointer.x, pointer.y)
       || this.containsPoint(this.elements.controlsToggleLabel, pointer.x, pointer.y)) {
+      return true;
+    }
+
+    if (this.containsPoint(this.elements.inventoryButton, pointer.x, pointer.y)
+      || this.containsPoint(this.elements.inventoryButtonLabel, pointer.x, pointer.y)
+      || this.containsPoint(this.elements.inventoryCloseButton, pointer.x, pointer.y)
+      || this.containsPoint(this.elements.inventoryCloseLabel, pointer.x, pointer.y)) {
+      return true;
+    }
+
+    if (this.inventoryOpen) {
+      if (this.inventoryPanelBounds?.contains(pointer.x, pointer.y)) {
+        return true;
+      }
+
+      this.closeInventory();
       return true;
     }
 
@@ -242,6 +592,30 @@ export default class PlayerHud {
    */
   closeControls() {
     this.setControlsOpen(false);
+  }
+
+  /**
+   * Toggles the inventory panel.
+   */
+  toggleInventory() {
+    this.setInventoryOpen(!this.inventoryOpen);
+  }
+
+  /**
+   * Closes the inventory panel.
+   */
+  closeInventory() {
+    this.setInventoryOpen(false);
+  }
+
+  /**
+   * Shows or hides the camera-pinned inventory panel.
+   */
+  setInventoryOpen(open) {
+    this.inventoryOpen = open;
+    this.inventoryOverlayElements.forEach((element) => {
+      element.setVisible(open);
+    });
   }
 
   /**
@@ -313,9 +687,10 @@ export default class PlayerHud {
     this.elements.expValueText.setText(`${Math.round(player.currentExp)} / ${player.expToNextLevel}`);
     this.elements.manaValueText.setText(`${Math.round(player.currentMana)} / ${player.maxMana}`);
     this.elements.fpsText.setText(`FPS: ${Math.floor(fps)}`);
+    this.elements.coinText.setText(`Coins: ${Math.max(0, Math.floor(player.coins ?? 0))}`);
 
     this.updateControlRow('move', 'Move', 'A / D', 'Left / Right', '');
-    this.updateControlRow('jump', 'Jump', 'W / Space', 'Hop / Climb', '');
+    this.updateControlRow('jump', 'Jump', 'W / Space', 'Hop / Double Jump', '');
     this.updateControlRow('smash', 'Attack', PLAYER_ACTION_KEYS.smash, attackLabels.smash, 'Free');
     this.updateControlRow('thrust', 'Skill', PLAYER_ACTION_KEYS.thrust, attackLabels.thrust, 'Free');
     this.updateControlRow('spinAttack', 'Skill', PLAYER_ACTION_KEYS.spinAttack, attackLabels.spinAttack, 'Free');

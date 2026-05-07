@@ -106,7 +106,7 @@ export const WORLD_SCENE_CONFIGS = Object.freeze({
       subtitle: 'Loading Sylvan Region ruins, platforms, enemies, music, and your selected hero...',
     }),
     preloadCheck: createWorldPreloadCheck({
-      textureKeys: ['ground', 'clouds', 'mountain', 'trees', 'potionShop'],
+      textureKeys: ['ground', 'clouds', 'mountain', 'trees', 'potionShop', 'coinDrop', 'inventoryButtonIcon'],
       audioKeys: ['grassyBiome'],
     }),
     rightTransitionThresholdX: WORLD_WIDTH - 24,
@@ -183,7 +183,7 @@ export const WORLD_SCENE_CONFIGS = Object.freeze({
       barStrokeColor: 0x79efc5,
     }),
     preloadCheck: createWorldPreloadCheck({
-      textureKeys: ['ground', 'clouds', 'mountain', 'trees', 'healerNpc'],
+      textureKeys: ['ground', 'clouds', 'mountain', 'trees', 'healerNpc', 'coinDrop', 'inventoryButtonIcon'],
       audioKeys: ['grassyBiome', 'healing'],
     }),
     rightTransitionThresholdX: null,

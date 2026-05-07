@@ -77,7 +77,7 @@ export const registerPlayerAnimations = (scene, characterConfig) => {
     { action: 'run', frameRate: 10, repeat: -1 },
     { action: 'jump', frameRate: 8, repeat: 0 },
     { action: 'fall', frameRate: 10, repeat: -1 },
-    { action: 'smash', frameRate: 25, repeat: 0 },
+    { action: 'smash', frameRate: 35, repeat: 0 },
     { action: 'thrust', frameRate: 20, repeat: 0 },
     { action: 'spinAttack', frameRate: 15, repeat: 0 },
     { action: 'surpriseJump', frameRate: 12, repeat: 0 },
@@ -95,6 +95,7 @@ export const registerPlayerAnimations = (scene, characterConfig) => {
 
     const key = buildCharacterAnimationKey(resolvedConfig.id, action);
     const resolvedFrameRate = resolvedConfig.animationFrameRates?.[action] ?? frameRate;
+    const resolvedRepeat = resolvedConfig.animationRepeats?.[action] ?? repeat;
     const range = resolvedConfig.animationFrameRanges?.[action]
       ?? frameRange
       ?? { start: 0, end: getLastFrameIndex(scene, textureKey) };
@@ -103,7 +104,7 @@ export const registerPlayerAnimations = (scene, characterConfig) => {
       key,
       frames: scene.anims.generateFrameNumbers(textureKey, range),
       frameRate: resolvedFrameRate,
-      repeat,
+      repeat: resolvedRepeat,
     });
   });
 

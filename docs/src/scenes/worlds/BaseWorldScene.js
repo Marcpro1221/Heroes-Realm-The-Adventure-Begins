@@ -36,6 +36,7 @@ export default class BaseWorldScene extends Phaser.Scene {
     this.roomEntrance = null;
     this.roomEntranceUi = null;
     this.roomEntranceDismissed = false;
+    this.collectibleGroup = null;
   }
 
   preload() {
@@ -82,6 +83,7 @@ export default class BaseWorldScene extends Phaser.Scene {
 
     this.createWorld();
     this.createPlayer();
+    this.createCollectibles();
     this.createUi();
     this.createAudio();
     this.createCamera();
@@ -113,6 +115,7 @@ export default class BaseWorldScene extends Phaser.Scene {
     if (gameState.enemyGroup) {
       this.enemyManager?.update();
     }
+    this.handleManualPickupInput();
     this.updateRoomEntrancePrompt();
     this.refreshPlayerUi();
     this.checkSceneTransition();
@@ -708,6 +711,25 @@ export default class BaseWorldScene extends Phaser.Scene {
     );
   }
 
+  createCollectibles() {
+    this.collectibleGroup = this.physics.add.group({
+      allowGravity: true,
+      collideWorldBounds: false,
+      immovable: false,
+    });
+
+    this.physics.add.collider(this.collectibleGroup, gameState.platforms);
+    this.physics.add.collider(this.collectibleGroup, gameState.oneWayPlatforms);
+    this.physics.add.collider(this.collectibleGroup, gameState.movingPlatform);
+    this.physics.add.overlap(
+      gameState.player,
+      this.collectibleGroup,
+      (_player, collectible) => this.collectCollectible(collectible),
+      null,
+      this,
+    );
+  }
+
   capturePlayerSnapshot(player) {
     return {
       currentHp: player.currentHp,
@@ -715,6 +737,7 @@ export default class BaseWorldScene extends Phaser.Scene {
       currentMana: player.currentMana,
       maxMana: player.maxMana,
       level: player.level,
+      coins: player.coins,
       currentExp: player.currentExp,
       expToNextLevel: player.expToNextLevel,
       totalEnemyKills: player.totalEnemyKills,
@@ -733,6 +756,7 @@ export default class BaseWorldScene extends Phaser.Scene {
     player.currentMana = snapshot.currentMana;
     player.maxMana = snapshot.maxMana;
     player.level = snapshot.level;
+    player.coins = snapshot.coins ?? player.coins;
     player.currentExp = snapshot.currentExp;
     player.expToNextLevel = snapshot.expToNextLevel;
     player.totalEnemyKills = snapshot.totalEnemyKills;
@@ -884,9 +908,13 @@ export default class BaseWorldScene extends Phaser.Scene {
       return false;
     }
 
-    const landingFromAbove = previousPlayerBottom <= (platformTop + 16) && player.body.velocity.y >= 0;
-    const alreadyOnPlatform = playerBottom <= (platformTop + 18) && player.body.velocity.y >= platform.body.velocity.y;
-    const hitFromBelow = player.body.top < platformBottom && player.body.velocity.y < 0;
+    const landingFromAbove = previousPlayerBottom <= (platformTop + 18)
+      && player.body.velocity.y >= (platform.body.velocity.y - 40);
+    const alreadyOnPlatform = Math.abs(playerBottom - platformTop) <= 12
+      && player.body.velocity.y >= (platform.body.velocity.y - 50);
+    const hitFromBelow = player.body.top < platformBottom
+      && previousPlayerBottom >= platformBottom
+      && player.body.velocity.y < 0;
 
     return landingFromAbove || alreadyOnPlatform || hitFromBelow;
   }
@@ -934,12 +962,91 @@ export default class BaseWorldScene extends Phaser.Scene {
     this.playerProfile?.update(gameState.player, this.getReferenceEnemyMaxHp());
   }
 
+  handleManualPickupInput() {
+    const pickupKey = gameState.player?.actionKeys?.pickup;
+    if (!pickupKey || !Phaser.Input.Keyboard.JustDown(pickupKey)) {
+      return;
+    }
+
+    const collectibles = this.collectibleGroup?.getChildren?.() ?? [];
+    const playerCenter = gameState.player?.body?.center ?? gameState.player;
+    if (!playerCenter) {
+      return;
+    }
+
+    collectibles.forEach((collectible) => {
+      if (!collectible?.active || collectible.getData('collected')) {
+        return;
+      }
+
+      const pickupRadius = collectible.getData('manualPickupRadius') ?? 56;
+      const distance = Phaser.Math.Distance.Between(playerCenter.x, playerCenter.y, collectible.x, collectible.y);
+      if (distance <= pickupRadius) {
+        this.collectCollectible(collectible);
+      }
+    });
+  }
+
+  spawnEnemyCoinDrop(enemy) {
+    if (!enemy || !this.collectibleGroup) {
+      return;
+    }
+
+    const coinReward = enemy.enemyConfig?.coinReward ?? ENEMY_ARCHETYPES[enemy.enemyType]?.coinReward ?? ENEMY_SETTINGS.coinPerEnemy;
+    const coin = this.collectibleGroup.create(enemy.x + 36, enemy.y + 24, 'coinDrop');
+    coin.setDepth(18);
+    coin.setDisplaySize(20, 20);
+    coin.setBounce(0.25, 0.18);
+    coin.setDragX(520);
+    coin.setMaxVelocity(180, 320);
+    coin.setVelocity(Phaser.Math.Between(-80, 80), Phaser.Math.Between(-220, -140));
+    coin.body.setSize(14, 14, true);
+    coin.setData('collected', false);
+    coin.setData('coinValue', Math.max(1, Math.round(coinReward)));
+    coin.setData('manualPickupRadius', 64);
+  }
+
+  collectCollectible(collectible) {
+    if (!collectible?.active || collectible.getData('collected')) {
+      return false;
+    }
+
+    collectible.setData('collected', true);
+    collectible.body?.stop?.();
+    if (collectible.body) {
+      collectible.body.enable = false;
+    }
+
+    const coinValue = collectible.getData('coinValue');
+    if (Number.isFinite(coinValue) && gameState.player) {
+      gameState.player.coins = (gameState.player.coins ?? 0) + coinValue;
+      this.showCoinGainIndicator(gameState.player, coinValue);
+      this.refreshPlayerUi();
+    }
+
+    this.tweens.add({
+      targets: collectible,
+      y: collectible.y - 18,
+      alpha: 0,
+      scaleX: 1.18,
+      scaleY: 1.18,
+      duration: 180,
+      ease: 'Cubic.easeOut',
+      onComplete: () => collectible.destroy(),
+    });
+    return true;
+  }
+
   togglePlayerProfile() {
     this.playerProfile?.toggle();
     this.refreshPlayerUi();
   }
 
   handleProfileOutsideClick(pointer) {
+    if (this.playerHud?.handlePointerDown(pointer)) {
+      return;
+    }
+
     if (this.roomEntranceUi?.visible && !this.roomEntranceUi.bounds.contains(pointer.x, pointer.y)) {
       this.closeRoomEntranceDialog(true);
     }
@@ -972,6 +1079,19 @@ export default class BaseWorldScene extends Phaser.Scene {
     const attackConfig = PLAYER_ATTACK_CONFIG[attackType];
     if (!attackConfig) {
       return 0;
+    }
+
+    if (attackType === 'specialAttack' && gameState.player?.getSpecialAttackDamage) {
+      const specialDamage = gameState.player.getSpecialAttackDamage(resolvedEnemyMaxHp, attackConfig);
+
+      if (typeof specialDamage === 'object') {
+        return {
+          min: Math.max(1, Math.round(specialDamage.min)),
+          max: Math.max(1, Math.round(specialDamage.max)),
+        };
+      }
+
+      return Math.max(1, Math.round(specialDamage));
     }
 
     const damageReferenceHp = attackType === 'specialAttack'
@@ -1183,6 +1303,26 @@ export default class BaseWorldScene extends Phaser.Scene {
     });
   }
 
+  showCoinGainIndicator(player, coinGain) {
+    const coinText = this.add.text(player.x, player.y - 84, `+${coinGain} Coins`, {
+      fontFamily: 'Arial',
+      fontSize: '18px',
+      color: '#ffd85a',
+      fontStyle: 'bold',
+      stroke: '#5a3200',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(240);
+
+    this.tweens.add({
+      targets: coinText,
+      y: coinText.y - 38,
+      alpha: 0,
+      duration: 700,
+      ease: 'Cubic.easeOut',
+      onComplete: () => coinText.destroy(),
+    });
+  }
+
   handlePlayerDeath(player) {
     if (this.isRestarting) {
       return;
@@ -1259,6 +1399,8 @@ export default class BaseWorldScene extends Phaser.Scene {
     this.roomEntranceDismissed = false;
     this.worldProps = {};
     this.staticPlatforms = [];
+    this.collectibleGroup?.clear(true, true);
+    this.collectibleGroup = null;
     gameState.player?.nameLabel?.destroy();
     gameState.player?.anims?.stop();
     this.enemyManager?.cleanup();

@@ -30,6 +30,14 @@ export const CHARACTER_CONFIGS = Object.freeze({
       specialAttack: { start: 0, end: 17 },
       hurt: { start: 0, end: 2 },
     },
+    animationFrameRates: {
+      smash: 35,
+      specialAttack: 10,
+    },
+    animationRepeats: {
+      smash: 0,
+      specialAttack: 0,
+    },
     animationTextures: {
       idle: 'luneblace.idle',
       idleBreak: 'luneblace.idleBreak',
@@ -64,6 +72,8 @@ export const CHARACTER_CONFIGS = Object.freeze({
     },
     combatProfile: {
       smash: {
+        totalDamagePercentMin: 0.14,
+        totalDamagePercentMax: 0.18,
         sound: { key: 'smashAttack', volume: 1.2 },
         hitbox: {
           width: 65,
@@ -79,8 +89,8 @@ export const CHARACTER_CONFIGS = Object.freeze({
         ],
       },
       thrust: {
-        damagePercentBonusMin: 0.13,
-        damagePercentBonusMax: 0.15,
+        damagePercentBonusMin: 0.21,
+        damagePercentBonusMax: 0.24,
         sound: { key: 'thrustAttack', volume: 1.2 },
         hitbox: {
           width: 95,
@@ -93,6 +103,10 @@ export const CHARACTER_CONFIGS = Object.freeze({
           { start: 1, end: 1, slashAngle: 4, sweepDirection: 1, slashRadius: 36 },
         ],
       },
+      spinAttack: {
+        damagePercentBonusMin: 0.18,
+        damagePercentBonusMax: 0.22,
+      },
       specialAttack: {
         mode: 'burst',
         sound: { key: 'heavySmash', volume: 1.2 },
@@ -104,11 +118,14 @@ export const CHARACTER_CONFIGS = Object.freeze({
         burstEndFrame: 9,
         hitboxDelayMs: 120,
         hitboxActiveDurationMs: 170,
-        fixedDamage: 60,
+        useBasePlusSpecialDamage: true,
+        specialDamagePercentMin: 0.52,
+        specialDamagePercentMax: 0.52,
+        specialDamageLevelBonusPercent: 0.007,
         uiLabels: {
           manaCost: '40 MP',
           range: '600 Range',
-          damage: '60% HP',
+          damage: 'Base + 52% (+0.7%/Lv)',
         },
       },
     },
@@ -139,7 +156,13 @@ export const CHARACTER_CONFIGS = Object.freeze({
     },
     animationFrameRates: {
       dash: 20,
+      smash: 18,
+      specialAttack: 12,
       spinAttack: 18,
+    },
+    animationRepeats: {
+      smash: 0,
+      specialAttack: 0,
     },
     animationTextures: {
       dash: 'reaper.dash',
@@ -205,6 +228,7 @@ export const CHARACTER_CONFIGS = Object.freeze({
       thrust: {
         damagePercentBonusMin: 0.13,
         damagePercentBonusMax: 0.13,
+        knockbackDistanceMultiplier: 3,
         sound: { key: 'reaperDoubleSlash', volume: 1.15, triggerFrames: [5] },
         hitbox: {
           width: 84,
@@ -219,7 +243,8 @@ export const CHARACTER_CONFIGS = Object.freeze({
       },
       specialAttack: {
         mode: 'melee',
-        fixedDamage: 100,
+        specialFixedPercentOfEnemyMaxHp: 1,
+        lifestealPercentOfEnemyMaxHp: 0.15,
         hpCost: 10,
         sound: { key: 'reaperSpecialSkill', volume: 1.15, triggerFrames: [7] },
         cameraShake: {
@@ -240,7 +265,7 @@ export const CHARACTER_CONFIGS = Object.freeze({
         uiLabels: {
           manaCost: '10 HP',
           range: 'Melee',
-          damage: '100% HP',
+          damage: '100% enemy max HP + 15% lifesteal/enemy',
         },
       },
       surpriseJump: {
@@ -335,6 +360,11 @@ export const CHARACTER_CONFIGS = Object.freeze({
       surpriseJump: 14,
       specialAttack: 14,
     },
+    animationRepeats: {
+      smash: 0,
+      specialAttack: 0,
+      spinAttack: 0,
+    },
     movementProfile: {
       dash: {
         durationMs: 170,
@@ -366,6 +396,7 @@ export const CHARACTER_CONFIGS = Object.freeze({
       thrust: {
         damagePercentBonusMin: 0.12,
         damagePercentBonusMax: 0.13,
+        knockbackDistanceMultiplier: 3,
         hitbox: {
           width: 62,
           height: 24,
@@ -387,8 +418,10 @@ export const CHARACTER_CONFIGS = Object.freeze({
         manaCost: 35,
         jumpOffsetX: 0,
         jumpOffsetY: 0,
-        damagePercentMin: 0.10,
-        damagePercentMax: 0.12,
+        useBasePlusSpecialDamage: true,
+        specialDamagePercentMin: 0.05,
+        specialDamagePercentMax: 0.05,
+        specialDamageLevelBonusPercent: 0.006,
         hitCooldownMs: 120,
         tintDurationMs: 220,
         sound: {
@@ -408,7 +441,7 @@ export const CHARACTER_CONFIGS = Object.freeze({
         uiLabels: {
           manaCost: '35 MP',
           range: '600 Radius From Cast Point',
-          damage: '10%-12% x 8',
+          damage: 'Base + 5% (+0.6%/Lv) x 8',
         },
         hitbox: {
           width: 132,

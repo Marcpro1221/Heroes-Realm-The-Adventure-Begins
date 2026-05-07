@@ -34,6 +34,7 @@ export default class Player extends Character {
     this.maxMana = 100;
     this.currentMana = this.maxMana;
     this.level = 1;
+    this.coins = 0;
     this.currentExp = 0;
     this.expToNextLevel = PLAYER_PROGRESS_SETTINGS.expToNextLevel;
     this.totalEnemyKills = 0;
@@ -54,6 +55,7 @@ export default class Player extends Character {
     this.smashStepApplied = false;
     this.thrustStepApplied = false;
     this.spinStepApplied = false;
+    this.isSpecialAttackCasting = false;
     this.specialAttackTriggered = false;
     this.healApplied = false;
     this.deathSpinSoundPlayed = false;
@@ -79,6 +81,7 @@ export default class Player extends Character {
     this.isMovementDashing = false;
     this.movementDashDirection = 0;
     this.movementDashEndsAt = 0;
+    this.remainingAirJumps = this.getJumpProfile().airJumpCount;
     this.lastLeftTapAt = -Infinity;
     this.lastRightTapAt = -Infinity;
     this.isUntouchable = false;
@@ -99,6 +102,7 @@ export default class Player extends Character {
       this[`key${key}`] = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes[key]);
     });
     this.actionKeys = {
+      pickup: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes[PLAYER_ACTION_KEYS.pickup]),
       smash: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes[PLAYER_ACTION_KEYS.smash]),
       thrust: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes[PLAYER_ACTION_KEYS.thrust]),
       spinAttack: scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes[PLAYER_ACTION_KEYS.spinAttack]),
@@ -230,6 +234,14 @@ export default class Player extends Character {
   }
 
   /**
+   * Returns one level-scaled special-attack bonus percent from the active profile.
+   */
+  getSpecialAttackLevelBonusPercent(specialAttackProfile = this.getCombatProfile('specialAttack')) {
+    const perLevelBonus = specialAttackProfile?.specialDamageLevelBonusPercent ?? 0;
+    return Math.max(0, (this.level ?? 1) - 1) * perLevelBonus;
+  }
+
+  /**
    * Returns the attack-specific percentage added on top of the character base damage.
    */
   getAttackBonusPercentRange(action) {
@@ -296,6 +308,21 @@ export default class Player extends Character {
    * FinalDamage = BaseDamage x (1 + SkillPercent)
    */
   getAttackDamagePercentRange(action, fallbackAttackConfig = null) {
+    const actionProfile = this.getCombatProfile(action);
+    if (actionProfile?.totalDamagePercentMin !== undefined || actionProfile?.totalDamagePercentMax !== undefined) {
+      return {
+        min: actionProfile.totalDamagePercentMin ?? actionProfile.totalDamagePercentMax ?? 0,
+        max: actionProfile.totalDamagePercentMax ?? actionProfile.totalDamagePercentMin ?? 0,
+      };
+    }
+
+    if (actionProfile?.totalDamagePercent !== undefined) {
+      return {
+        min: actionProfile.totalDamagePercent,
+        max: actionProfile.totalDamagePercent,
+      };
+    }
+
     const baseRange = this.getBaseDamagePercentRange();
     const skillPercentRange = this.getSkillDamagePercentRange(action, fallbackAttackConfig);
 
@@ -303,6 +330,92 @@ export default class Player extends Character {
       min: baseRange.min * (1 + skillPercentRange.min),
       max: baseRange.max * (1 + skillPercentRange.max),
     };
+  }
+
+  /**
+   * Returns one resolved special-attack damage result for the current enemy max HP.
+   */
+  getSpecialAttackDamage(enemyMaxHp, fallbackAttackConfig = null) {
+    const specialAttackProfile = this.getCombatProfile('specialAttack');
+
+    if (typeof specialAttackProfile?.specialFixedPercentOfEnemyMaxHp === 'number') {
+      return Math.max(1, Math.round(enemyMaxHp * specialAttackProfile.specialFixedPercentOfEnemyMaxHp));
+    }
+
+    if (specialAttackProfile?.useBasePlusSpecialDamage) {
+      const baseRange = this.getBaseDamagePercentRange();
+      const levelBonusPercent = this.getSpecialAttackLevelBonusPercent(specialAttackProfile);
+      const specialMin = (specialAttackProfile.specialDamagePercentMin
+        ?? specialAttackProfile.specialDamagePercent
+        ?? fallbackAttackConfig?.specialDamagePercentMin
+        ?? fallbackAttackConfig?.damagePercentMin
+        ?? fallbackAttackConfig?.damagePercent
+        ?? 0) + levelBonusPercent;
+      const specialMax = (specialAttackProfile.specialDamagePercentMax
+        ?? specialAttackProfile.specialDamagePercent
+        ?? fallbackAttackConfig?.specialDamagePercentMax
+        ?? fallbackAttackConfig?.damagePercentMax
+        ?? fallbackAttackConfig?.damagePercent
+        ?? specialMin) + levelBonusPercent;
+
+      return {
+        min: Math.max(1, Math.round(enemyMaxHp * (baseRange.min + specialMin))),
+        max: Math.max(1, Math.round(enemyMaxHp * (baseRange.max + specialMax))),
+      };
+    }
+
+    const percentRange = this.getAttackDamagePercentRange('specialAttack', fallbackAttackConfig);
+    return {
+      min: Math.max(1, Math.round(enemyMaxHp * percentRange.min)),
+      max: Math.max(1, Math.round(enemyMaxHp * percentRange.max)),
+    };
+  }
+
+  /**
+   * Applies on-hit benefits granted by the active special attack.
+   */
+  applySpecialAttackHitBenefits(enemy) {
+    const specialAttackProfile = this.getCombatProfile('specialAttack');
+    const lifestealPercent = specialAttackProfile?.lifestealPercentOfEnemyMaxHp;
+    if (!enemy || typeof lifestealPercent !== 'number' || lifestealPercent <= 0) {
+      return;
+    }
+
+    const healAmount = Math.max(1, Math.round((enemy.maxHp ?? 0) * lifestealPercent));
+    const nextHp = Math.min(this.maxHp, this.currentHp + healAmount);
+    const appliedHeal = nextHp - this.currentHp;
+    if (appliedHeal <= 0) {
+      return;
+    }
+
+    this.currentHp = nextHp;
+    this.showDamagePopup(this.x, this.y - 24, `+${appliedHeal}`, '#7CFF8A', 1200, 80);
+    this.scene?.refreshPlayerUi?.();
+  }
+
+  /**
+   * Returns true when the player is grounded on terrain or an aligned moving platform.
+   */
+  isGrounded() {
+    if (!this.body) {
+      return false;
+    }
+
+    if (this.body.blocked.down || this.body.touching.down || this.body.onFloor?.()) {
+      return true;
+    }
+
+    const platformBody = gameState.movingPlatform?.body;
+    if (!platformBody) {
+      return false;
+    }
+
+    const horizontalOverlap = this.body.right > (platformBody.left + 2)
+      && this.body.left < (platformBody.right - 2);
+    const verticalProximity = Math.abs(this.body.bottom - platformBody.top) <= 10;
+    const ridingPlatform = this.body.velocity.y >= (platformBody.velocity.y - 40);
+
+    return horizontalOverlap && verticalProximity && ridingPlatform;
   }
 
   /**
@@ -847,6 +960,7 @@ export default class Player extends Character {
    */
   beginSpecialAttackAction() {
     const specialAttackProfile = this.getCombatProfile('specialAttack');
+    this.isSpecialAttackCasting = true;
     this.trackedSpecialEnemy = null;
     this.lastSpecialStrikeFrame = null;
     this.specialAttackAnchorY = this.y;
@@ -875,7 +989,222 @@ export default class Player extends Character {
     this.resetAttackAudioState();
     this.swordSwing = true;
     this.isUntouchable = Boolean(this.trackedSpecialEnemy);
+    this.playSpecialAttackCastPresentation();
     this.playAnimation('specialAttack');
+  }
+
+  /**
+   * Plays one shared cast-time presentation for any special skill.
+   */
+  playSpecialAttackCastPresentation() {
+    const camera = this.scene.cameras.main;
+    const viewportWidth = camera.width;
+    const viewportHeight = camera.height;
+    const specialAttackKey = this.getOptionalAnimationKey('specialAttack');
+    const specialAnimation = specialAttackKey ? this.scene.anims.get(specialAttackKey) : null;
+    const specialDurationMs = specialAnimation
+      ? Math.max(800, Math.ceil((specialAnimation.frames.length / Math.max(specialAnimation.frameRate, 1)) * 1000))
+      : 1200;
+    const introDurationMs = Math.max(220, Math.round(specialDurationMs * 0.22));
+    const holdDurationMs = Math.max(320, Math.round(specialDurationMs * 0.36));
+    const labelFadeDelayMs = Math.max(120, Math.round(specialDurationMs * 0.18));
+    const labelFadeDurationMs = Math.max(420, specialDurationMs - labelFadeDelayMs);
+    const burstFadeDurationMs = Math.max(360, Math.round(specialDurationMs * 0.52));
+    const attackLabel = this.characterConfig?.attackLabels?.specialAttack ?? 'SPECIAL SKILL';
+    const bannerY = Math.max(54, viewportHeight * 0.15);
+    const playerCenterX = this.body ? this.body.center.x : this.x;
+    const playerTopY = this.body ? this.body.top : this.y;
+    const titleText = attackLabel.toUpperCase();
+    const streakColor = 0x8ae7ff;
+    const accentColor = 0xffef9b;
+    const topGlow = this.scene.add.rectangle(viewportWidth / 2, 34, viewportWidth * 0.94, 22, streakColor, 0.0)
+      .setScrollFactor(0)
+      .setDepth(260);
+    const bottomGlow = this.scene.add.rectangle(viewportWidth / 2, viewportHeight - 34, viewportWidth * 0.94, 22, streakColor, 0.0)
+      .setScrollFactor(0)
+      .setDepth(260);
+    const dashLights = [];
+    const dashGroups = [
+      {
+        direction: 'right',
+        lanes: [
+          { y: 18, width: 0.22, height: 3, offsetDelay: 0, color: 0xf4fbff, alpha: 0.95 },
+          { y: 32, width: 0.28, height: 3, offsetDelay: 120, color: 0x9ae7ff, alpha: 0.82 },
+          { y: 46, width: 0.18, height: 2, offsetDelay: 220, color: 0xffef9b, alpha: 0.78 },
+        ],
+        waveIntervalMs: 280,
+        durationScale: 0.48,
+      },
+      {
+        direction: 'right',
+        lanes: [
+          { y: 24, width: 0.34, height: 4, offsetDelay: 80, color: 0x8ae7ff, alpha: 0.74 },
+          { y: 52, width: 0.30, height: 3, offsetDelay: 190, color: 0xf4fbff, alpha: 0.7 },
+        ],
+        waveIntervalMs: 360,
+        durationScale: 0.62,
+      },
+      {
+        direction: 'left',
+        lanes: [
+          { y: viewportHeight - 18, width: 0.22, height: 3, offsetDelay: 30, color: 0xffef9b, alpha: 0.92 },
+          { y: viewportHeight - 34, width: 0.28, height: 3, offsetDelay: 160, color: 0x9ae7ff, alpha: 0.82 },
+          { y: viewportHeight - 50, width: 0.18, height: 2, offsetDelay: 240, color: 0xf4fbff, alpha: 0.72 },
+        ],
+        waveIntervalMs: 300,
+        durationScale: 0.5,
+      },
+      {
+        direction: 'left',
+        lanes: [
+          { y: viewportHeight - 26, width: 0.34, height: 4, offsetDelay: 90, color: 0xf4fbff, alpha: 0.84 },
+          { y: viewportHeight - 42, width: 0.30, height: 3, offsetDelay: 210, color: 0x8ae7ff, alpha: 0.68 },
+        ],
+        waveIntervalMs: 380,
+        durationScale: 0.66,
+      },
+    ];
+
+    const spawnDashLight = (lane, direction, groupDurationMs, startDelayMs) => {
+      const fromLeft = direction === 'right';
+      const startX = fromLeft ? -(viewportWidth * 0.42) : viewportWidth + (viewportWidth * 0.42);
+      const targetX = fromLeft ? viewportWidth + (viewportWidth * 0.42) : -(viewportWidth * 0.42);
+      const dash = this.scene.add.rectangle(
+        startX,
+        lane.y,
+        viewportWidth * lane.width,
+        lane.height,
+        lane.color,
+        lane.alpha,
+      ).setScrollFactor(0).setDepth(261);
+      dashLights.push(dash);
+      this.scene.tweens.add({
+        targets: dash,
+        x: targetX,
+        alpha: { from: lane.alpha, to: 0.04 },
+        duration: groupDurationMs,
+        delay: startDelayMs,
+        ease: 'Sine.easeInOut',
+        onComplete: () => dash.destroy(),
+      });
+    };
+
+    dashGroups.forEach((group) => {
+      const groupDurationMs = Math.max(220, Math.round(specialDurationMs * group.durationScale));
+      const activeWindowMs = Math.max(0, specialDurationMs - groupDurationMs);
+      const waveCount = Math.max(1, Math.floor(activeWindowMs / group.waveIntervalMs) + 1);
+      for (let waveIndex = 0; waveIndex < waveCount; waveIndex += 1) {
+        const waveDelayMs = waveIndex * group.waveIntervalMs;
+        group.lanes.forEach((lane) => {
+          spawnDashLight(lane, group.direction, groupDurationMs, waveDelayMs + lane.offsetDelay);
+        });
+      }
+    });
+    const labelShadow = this.scene.add.text(playerCenterX + 2, playerTopY - 82, titleText, {
+      fontFamily: 'Arial',
+      fontSize: '28px',
+      color: '#04131f',
+      fontStyle: 'bold',
+      stroke: '#04131f',
+      strokeThickness: 6,
+    }).setOrigin(0.5).setDepth(262);
+    const labelText = this.scene.add.text(playerCenterX, playerTopY - 86, titleText, {
+      fontFamily: 'Arial',
+      fontSize: '28px',
+      color: '#fff8cf',
+      fontStyle: 'bold',
+      stroke: '#67e8ff',
+      strokeThickness: 4,
+      shadow: { offsetX: 0, offsetY: 0, color: '#67e8ff', blur: 14, fill: true },
+    }).setOrigin(0.5).setDepth(263);
+    const bannerText = this.scene.add.text(viewportWidth / 2, bannerY, 'ULTIMATE RELEASE', {
+      fontFamily: 'Arial',
+      fontSize: '18px',
+      color: '#e9fbff',
+      fontStyle: 'bold',
+      stroke: '#0b2235',
+      strokeThickness: 3,
+      backgroundColor: '#153854',
+      padding: { x: 14, y: 5 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(262);
+    const burstRing = this.scene.add.ellipse(playerCenterX, playerTopY - 6, 54, 54)
+      .setStrokeStyle(3, accentColor, 0.9)
+      .setDepth(261);
+    const burstGlow = this.scene.add.ellipse(playerCenterX, playerTopY - 6, 96, 96, streakColor, 0.12)
+      .setDepth(260);
+
+    this.scene.tweens.add({
+      targets: [topGlow, bottomGlow],
+      alpha: { from: 0, to: 0.6 },
+      duration: introDurationMs,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: [topGlow, bottomGlow],
+          alpha: { from: 0.6, to: 0 },
+          duration: Math.max(320, specialDurationMs - introDurationMs),
+          ease: 'Sine.easeInOut',
+          onComplete: () => {
+            topGlow.destroy();
+            bottomGlow.destroy();
+          },
+        });
+      },
+    });
+    this.scene.tweens.add({
+      targets: [labelShadow, labelText, bannerText],
+      alpha: { from: 0, to: 1 },
+      scaleX: { from: 0.94, to: 1 },
+      scaleY: { from: 0.94, to: 1 },
+      duration: introDurationMs,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: [labelShadow, labelText],
+          y: '-=32',
+          alpha: 0,
+          scaleX: 1.08,
+          scaleY: 1.08,
+          delay: labelFadeDelayMs,
+          duration: labelFadeDurationMs,
+          ease: 'Sine.easeInOut',
+          onComplete: () => {
+            labelShadow.destroy();
+            labelText.destroy();
+          },
+        });
+      },
+    });
+    this.scene.tweens.add({
+      targets: bannerText,
+      scaleX: { from: 1, to: 1.05 },
+      scaleY: { from: 1, to: 1.05 },
+      y: '-=8',
+      duration: introDurationMs,
+      yoyo: true,
+      hold: holdDurationMs,
+      ease: 'Sine.easeInOut',
+    });
+    this.scene.tweens.add({
+      targets: bannerText,
+      alpha: { from: 1, to: 0 },
+      delay: introDurationMs + holdDurationMs,
+      duration: Math.max(260, specialDurationMs - introDurationMs - holdDurationMs),
+      ease: 'Sine.easeInOut',
+      onComplete: () => bannerText.destroy(),
+    });
+    this.scene.tweens.add({
+      targets: [burstRing, burstGlow],
+      scaleX: { from: 0.7, to: 1.5 },
+      scaleY: { from: 0.7, to: 1.5 },
+      alpha: { from: 0.9, to: 0 },
+      duration: burstFadeDurationMs,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        burstRing.destroy();
+        burstGlow.destroy();
+      },
+    });
   }
 
   /**
@@ -1222,6 +1551,69 @@ export default class Player extends Character {
   }
 
   /**
+   * Returns the resolved grounded-jump and air-jump tuning for the active character.
+   */
+  getJumpProfile() {
+    const jumpProfile = this.getMovementProfile('jump');
+    return {
+      velocity: jumpProfile?.velocity ?? 500,
+      airJumpCount: Math.max(0, jumpProfile?.airJumpCount ?? 1),
+      airJumpHeightRatio: Phaser.Math.Clamp(jumpProfile?.airJumpHeightRatio ?? 0.5, 0, 1),
+    };
+  }
+
+  /**
+   * Returns true when any jump key was pressed this frame.
+   */
+  isJumpJustPressed() {
+    return Phaser.Input.Keyboard.JustDown(this.cursors.up)
+      || Phaser.Input.Keyboard.JustDown(this.keyW)
+      || Phaser.Input.Keyboard.JustDown(this.keySPACE);
+  }
+
+  /**
+   * Restores the available air jumps whenever the player is standing on solid ground.
+   */
+  resetAirJumpsIfGrounded() {
+    if (!this.isGrounded()) {
+      return false;
+    }
+
+    this.remainingAirJumps = this.getJumpProfile().airJumpCount;
+    return true;
+  }
+
+  /**
+   * Starts a grounded jump or one additional air jump at reduced height.
+   */
+  tryJump() {
+    if (!this.isJumpJustPressed()) {
+      return false;
+    }
+
+    const isGrounded = this.isGrounded();
+    const jumpProfile = this.getJumpProfile();
+
+    if (isGrounded) {
+      this.setVelocityY(-jumpProfile.velocity);
+      this.playAnimation('jump');
+      return true;
+    }
+
+    if (this.remainingAirJumps <= 0) {
+      return false;
+    }
+
+    // Arcade jump height scales with velocity squared, so sqrt(0.5) produces
+    // an air jump that reaches roughly half the grounded jump height.
+    const airJumpVelocity = jumpProfile.velocity * Math.sqrt(jumpProfile.airJumpHeightRatio);
+    this.remainingAirJumps -= 1;
+    this.setVelocityY(-airJumpVelocity);
+    this.playAnimation('jump');
+    return true;
+  }
+
+  /**
    * Starts a horizontal dash in the requested direction.
    */
   startDirectionalDash(direction) {
@@ -1429,6 +1821,7 @@ export default class Player extends Character {
       this.smashStepApplied = false;
       this.thrustStepApplied = false;
       this.spinStepApplied = false;
+      this.isSpecialAttackCasting = false;
       this.specialAttackTriggered = false;
       this.healApplied = false;
       this.surpriseAttackPrimed = false;
@@ -1471,6 +1864,8 @@ export default class Player extends Character {
       return;
     }
 
+    this.resetAirJumpsIfGrounded();
+
     let movingX = false;
     const baseSpeed = 200;
     let isPerformingAction = false;
@@ -1511,6 +1906,7 @@ export default class Player extends Character {
         }
       } else if (
         this.combatEnabled
+        && !this.isSpecialAttackCasting
         && Phaser.Input.Keyboard.JustDown(this.actionKeys.specialAttack)
         && this.getOptionalAnimationKey('specialAttack')
       ) {
@@ -1518,7 +1914,7 @@ export default class Player extends Character {
         if (!this.canSpendHp(specialAttackHpCost)) {
           this.showNotEnoughHp();
           isPerformingAction = true;
-        } else if (!this.body.blocked.down) {
+        } else if (!this.isGrounded()) {
           this.showOnGroundCastWarning();
           isPerformingAction = true;
         } else {
@@ -1536,9 +1932,7 @@ export default class Player extends Character {
         if (this.tryStartDirectionalDash()) {
           isPerformingAction = true;
         } else {
-          if ((this.cursors.up.isDown || this.keyW.isDown || this.keySPACE.isDown) && this.body.blocked.down) {
-            this.setVelocityY(-500);
-            this.playAnimation('jump');
+          if (this.tryJump()) {
             isPerformingAction = true;
           }
 
@@ -1556,7 +1950,7 @@ export default class Player extends Character {
             isPerformingAction = true;
           }
 
-          if (this.body.velocity.y > 0 && !this.body.touching.down) {
+          if (this.body.velocity.y > 0 && !this.isGrounded()) {
             this.playAnimation('fall');
             isPerformingAction = true;
           } else if (!movingX && this.anims.currentAnim?.key !== this.getOptionalAnimationKey('idleBreak')) {
@@ -1606,7 +2000,7 @@ export default class Player extends Character {
     if (this.scene.time.now >= this.sceneEntryState.endsAt) {
       this.sceneEntryState = null;
       this.setVelocityX(0);
-      if (this.body.blocked.down || this.body.touching.down) {
+      if (this.isGrounded()) {
         this.playAnimation('idle', true);
       }
       return false;
@@ -1617,7 +2011,7 @@ export default class Player extends Character {
     this.setVelocityX(speed * direction);
     this.flipX = direction < 0;
 
-    if (this.body.velocity.y > 0 && !this.body.touching.down) {
+    if (this.body.velocity.y > 0 && !this.isGrounded()) {
       this.playAnimation('fall');
     } else {
       this.playAnimation('run');
@@ -1633,7 +2027,7 @@ export default class Player extends Character {
     const idleBreakKey = this.getOptionalAnimationKey('idleBreak');
     const isIdle = !isPerformingAction
       && !movingX
-      && this.body.blocked.down
+      && this.isGrounded()
       && !this.cursors.left.isDown
       && !this.cursors.right.isDown
       && !this.keyA.isDown
@@ -2193,6 +2587,7 @@ export default class Player extends Character {
     this.smashStepApplied = false;
     this.thrustStepApplied = false;
     this.spinStepApplied = false;
+    this.isSpecialAttackCasting = false;
     this.specialAttackTriggered = false;
     this.healApplied = false;
     this.surpriseAttackPrimed = false;
