@@ -267,7 +267,7 @@ export default class EnemyManager {
       x: gameState.player?.body?.center.x ?? gameState.player?.x ?? enemy.x,
       y: gameState.player?.body?.center.y ?? gameState.player?.y ?? enemy.y,
     });
-    enemy.provoke();
+    enemy.provoke(gameState.player, ENEMY_SETTINGS);
     this.applyEnemyKnockback(enemy, gameState.player, attackType, damage);
     enemy.anims.play(enemy.animationKeys.hurt, true);
     enemy.showDamagePopup(enemy.x + 40, enemy.y + 40, damage);
@@ -291,9 +291,6 @@ export default class EnemyManager {
 
       enemy.isHurting = false;
       enemy.anims.play(enemy.animationKeys.walk, true);
-      if (enemy.isChasingPlayer) {
-        enemy.beginTweenToLocation(enemy.lastHitLocation?.x ?? enemy.x, ENEMY_SETTINGS);
-      }
     });
   }
 

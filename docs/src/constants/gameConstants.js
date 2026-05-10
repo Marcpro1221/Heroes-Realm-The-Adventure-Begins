@@ -90,6 +90,7 @@ export const ENEMY_SETTINGS = Object.freeze({
   patrolEdgePadding: 18,
   obstacleNudgeDistance: 14,
   chaseSpeed: 88,
+  hitChaseDurationMs: 2000,
   disengageDelayMs: 2000,
   repositionDurationMs: 900,
 });

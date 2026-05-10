@@ -20,6 +20,7 @@ export default class Enemy extends Character {
     this.patrolMaxX = x + 120;
     this.patrolSpeed = 55.55;
     this.patrolDirection = 1;
+    this.patrolRangeWidth = this.patrolMaxX - this.patrolMinX;
     this.knockbackVelocityX = 0;
     this.knockbackDamping = 0.84;
     this.knockbackFacingLock = null;
@@ -28,6 +29,10 @@ export default class Enemy extends Character {
     this.isRepositioning = false;
     this.repositionTween = null;
     this.tweenTargetX = null;
+    this.savedTweenOriginX = x;
+    this.discardedTweenTargetX = null;
+    this.hitChaseTarget = null;
+    this.hitChaseEndAt = -Infinity;
     this.lastHitLocation = null;
     this.lastProvokedAt = -Infinity;
     this.lastAttackAt = -Infinity;
@@ -44,8 +49,8 @@ export default class Enemy extends Character {
    */
   updateMovement(enemySettings) {
     const currentTime = this.scene.time.now;
-    if (this.isChasingPlayer && (currentTime - this.lastProvokedAt) >= (enemySettings?.disengageDelayMs ?? 0)) {
-      this.isChasingPlayer = false;
+    if (this.isChasingPlayer && currentTime >= this.hitChaseEndAt) {
+      this.finishHitChase(enemySettings);
     }
 
     if (this.isRepositioning) {
@@ -53,31 +58,35 @@ export default class Enemy extends Character {
       return;
     }
 
-    if (
-      this.isChasingPlayer
-      && !this.isHurting
-      && !this.repositionTween
-      && this.lastHitLocation
-      && Math.abs(this.x - this.getClampedTweenTargetX(this.lastHitLocation.x, enemySettings)) > 6
-    ) {
-      this.beginTweenToLocation(this.lastHitLocation.x, enemySettings);
-      this.setVelocityX(0);
-      return;
-    }
-
     const safePatrolBounds = this.getSafePatrolBounds(enemySettings);
     const isUnderHitKnockback = this.isHurting || Math.abs(this.knockbackVelocityX) >= this.knockbackFacingThreshold;
+    let desiredVelocityX = this.patrolSpeed * this.patrolDirection;
 
-    if (!isUnderHitKnockback && this.x <= safePatrolBounds.min) {
-      this.x = safePatrolBounds.min;
-      this.patrolDirection = 1;
-    } else if (!isUnderHitKnockback && this.x >= safePatrolBounds.max) {
-      this.x = safePatrolBounds.max;
-      this.patrolDirection = -1;
+    if (this.isChasingPlayer) {
+      const chaseTargetLocation = this.getHitChaseTargetLocation();
+      if (chaseTargetLocation) {
+        this.lastHitLocation = chaseTargetLocation;
+        if (Math.abs(chaseTargetLocation.x - this.x) > 4) {
+          this.patrolDirection = chaseTargetLocation.x >= this.x ? 1 : -1;
+        }
+      }
+
+      desiredVelocityX = this.isHurting
+        ? 0
+        : (enemySettings?.chaseSpeed ?? this.patrolSpeed);
+    } else {
+      if (!isUnderHitKnockback && this.x <= safePatrolBounds.min) {
+        this.x = safePatrolBounds.min;
+        this.patrolDirection = 1;
+      } else if (!isUnderHitKnockback && this.x >= safePatrolBounds.max) {
+        this.x = safePatrolBounds.max;
+        this.patrolDirection = -1;
+      }
+
+      desiredVelocityX = this.patrolSpeed;
     }
 
-    const patrolVelocityX = this.patrolSpeed * this.patrolDirection;
-    this.setVelocityX(patrolVelocityX + this.knockbackVelocityX);
+    this.setVelocityX((desiredVelocityX * this.patrolDirection) + this.knockbackVelocityX);
     this.handleObstacleAvoidance(enemySettings, isUnderHitKnockback);
 
     if (Math.abs(this.knockbackVelocityX) < 6) {
@@ -115,10 +124,21 @@ export default class Enemy extends Character {
   /**
    * Marks the enemy as aggroed so it chases the player that attacked it.
    */
-  provoke() {
+  provoke(target = null, enemySettings = null) {
     this.lastProvokedAt = this.scene.time.now;
     this.lastAttackAt = this.scene.time.now;
     this.isChasingPlayer = true;
+    this.hitChaseTarget = target;
+    this.hitChaseEndAt = this.scene.time.now + (enemySettings?.hitChaseDurationMs ?? enemySettings?.disengageDelayMs ?? 0);
+    if (this.repositionTween && Number.isFinite(this.tweenTargetX)) {
+      this.discardedTweenTargetX = this.tweenTargetX;
+    }
+    this.stopRepositionTween();
+
+    const chaseTargetLocation = this.getHitChaseTargetLocation();
+    if (chaseTargetLocation) {
+      this.lastHitLocation = chaseTargetLocation;
+    }
   }
 
   /**
@@ -177,6 +197,42 @@ export default class Enemy extends Character {
     return true;
   }
 
+  stopRepositionTween() {
+    this.isRepositioning = false;
+    this.tweenTargetX = null;
+    if (this.repositionTween) {
+      this.repositionTween.stop();
+      return;
+    }
+
+    this.repositionTween = null;
+  }
+
+  getHitChaseTargetLocation() {
+    const targetX = this.hitChaseTarget?.body?.center?.x ?? this.hitChaseTarget?.x ?? this.lastHitLocation?.x;
+    const targetY = this.hitChaseTarget?.body?.center?.y ?? this.hitChaseTarget?.y ?? this.lastHitLocation?.y ?? this.y;
+    if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
+      return null;
+    }
+
+    return { x: targetX, y: targetY };
+  }
+
+  finishHitChase(enemySettings) {
+    this.isChasingPlayer = false;
+    this.hitChaseTarget = null;
+    this.hitChaseEndAt = -Infinity;
+    const currentTweenStartX = this.getClampedTweenTargetX(this.x, enemySettings);
+    this.reanchorPatrolBounds(currentTweenStartX, enemySettings);
+    this.savedTweenOriginX = currentTweenStartX;
+    this.tweenTargetX = null;
+    this.lastHitLocation = {
+      x: currentTweenStartX,
+      y: this.y,
+    };
+    this.beginRepositionFromCurrentLocation(enemySettings, currentTweenStartX);
+  }
+
   handleObstacleAvoidance(enemySettings, isUnderHitKnockback = false) {
     if (!this.body) {
       return;
@@ -210,9 +266,37 @@ export default class Enemy extends Character {
    */
   beginReposition(enemySettings) {
     this.isChasingPlayer = false;
+    this.hitChaseTarget = null;
+    this.hitChaseEndAt = -Infinity;
+    this.savedTweenOriginX = this.getClampedTweenTargetX(this.x, enemySettings);
+    this.beginRepositionFromCurrentLocation(enemySettings, this.savedTweenOriginX);
+  }
+
+  beginRepositionFromCurrentLocation(enemySettings, startX = this.x) {
     const safePatrolBounds = this.getSafePatrolBounds(enemySettings);
-    const targetX = Phaser.Math.Between(Math.round(safePatrolBounds.min), Math.round(safePatrolBounds.max));
+    const resolvedStartX = this.getClampedTweenTargetX(startX, enemySettings);
+    this.savedTweenOriginX = resolvedStartX;
+    let targetX = resolvedStartX;
+    let attempts = 0;
+
+    while (
+      attempts < 10
+      && (
+        Math.abs(targetX - resolvedStartX) < 24
+        || (Number.isFinite(this.discardedTweenTargetX) && Math.abs(targetX - this.discardedTweenTargetX) <= 6)
+      )
+    ) {
+      targetX = Phaser.Math.Between(Math.round(safePatrolBounds.min), Math.round(safePatrolBounds.max));
+      attempts += 1;
+    }
+
+    if (Number.isFinite(this.discardedTweenTargetX) && Math.abs(targetX - this.discardedTweenTargetX) <= 6) {
+      targetX = resolvedStartX;
+    }
+
     this.beginTweenToLocation(targetX, enemySettings, () => {
+      this.savedTweenOriginX = this.getClampedTweenTargetX(this.x, enemySettings);
+      this.discardedTweenTargetX = null;
       this.patrolDirection = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
       this.applyFacing(this.patrolDirection > 0);
     });
@@ -246,7 +330,7 @@ export default class Enemy extends Character {
       enemySettings?.repositionDurationMs ?? 0,
     );
 
-    this.repositionTween?.stop();
+    this.stopRepositionTween();
     this.repositionTween = this.scene.tweens.add({
       targets: this,
       x: resolvedTargetX,
@@ -287,11 +371,39 @@ export default class Enemy extends Character {
   setPatrolBounds(minX, maxX) {
     this.patrolMinX = Math.min(minX, maxX);
     this.patrolMaxX = Math.max(minX, maxX);
+    this.patrolRangeWidth = Math.max(0, this.patrolMaxX - this.patrolMinX);
     this.patrolStartX = this.patrolMinX;
     this.patrolEndX = this.patrolMaxX;
     const safePatrolBounds = this.getSafePatrolBounds();
     this.x = Phaser.Math.Clamp(this.x, safePatrolBounds.min, safePatrolBounds.max);
     this.patrolDirection = this.x >= safePatrolBounds.max ? -1 : 1;
+  }
+
+  reanchorPatrolBounds(centerX, enemySettings) {
+    const rangeWidth = Math.max(48, this.patrolRangeWidth || (this.patrolMaxX - this.patrolMinX) || 240);
+    const halfRange = rangeWidth / 2;
+    const worldBounds = this.scene.physics?.world?.bounds;
+    const padding = enemySettings?.patrolEdgePadding ?? 0;
+    const minWorldX = Number.isFinite(worldBounds?.x) ? worldBounds.x + padding : -Infinity;
+    const maxWorldX = Number.isFinite(worldBounds?.right) ? worldBounds.right - padding : Infinity;
+
+    let nextMinX = centerX - halfRange;
+    let nextMaxX = centerX + halfRange;
+
+    if (nextMinX < minWorldX) {
+      nextMaxX += minWorldX - nextMinX;
+      nextMinX = minWorldX;
+    }
+
+    if (nextMaxX > maxWorldX) {
+      nextMinX -= nextMaxX - maxWorldX;
+      nextMaxX = maxWorldX;
+    }
+
+    this.patrolMinX = Math.min(nextMinX, nextMaxX);
+    this.patrolMaxX = Math.max(nextMinX, nextMaxX);
+    this.patrolStartX = this.patrolMinX;
+    this.patrolEndX = this.patrolMaxX;
   }
 
   /**

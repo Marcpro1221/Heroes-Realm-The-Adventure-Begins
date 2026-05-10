@@ -111,8 +111,8 @@ export const CHARACTER_CONFIGS = Object.freeze({
         mode: 'burst',
         sound: { key: 'heavySmash', volume: 1.2 },
         cameraShake: {
-          duration: 180,
-          intensity: 0.01,
+          duration: 320,
+          intensity: 0.018,
         },
         burstStartFrame: 5,
         burstEndFrame: 9,
@@ -248,8 +248,8 @@ export const CHARACTER_CONFIGS = Object.freeze({
         hpCost: 10,
         sound: { key: 'reaperSpecialSkill', volume: 1.15, triggerFrames: [7] },
         cameraShake: {
-          duration: 220,
-          intensity: 0.007,
+          duration: 360,
+          intensity: 0.016,
           onHitOnly: true,
         },
         hitbox: {
@@ -433,8 +433,8 @@ export const CHARACTER_CONFIGS = Object.freeze({
           ],
         },
         cameraShake: {
-          duration: 90,
-          intensity: 0.0045,
+          duration: 180,
+          intensity: 0.0105,
           onHitOnly: true,
           triggerFrames: [18, 21, 24, 27, 30, 32, 34, 35],
         },

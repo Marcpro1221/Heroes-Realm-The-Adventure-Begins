@@ -370,6 +370,19 @@ export default class MainScene extends Phaser.Scene {
       return 0;
     }
 
+    if (attackType === 'specialAttack' && gameState.player?.getSpecialAttackDamage) {
+      const specialDamage = gameState.player.getSpecialAttackDamage(enemyMaxHp, attackConfig);
+
+      if (typeof specialDamage === 'object') {
+        return {
+          min: Math.max(1, Math.round(specialDamage.min)),
+          max: Math.max(1, Math.round(specialDamage.max)),
+        };
+      }
+
+      return Math.max(1, Math.round(specialDamage));
+    }
+
     const damageReferenceHp = attackType === 'specialAttack'
       ? enemyMaxHp
       : ENEMY_SETTINGS.maxHp;
