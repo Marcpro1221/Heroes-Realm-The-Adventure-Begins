@@ -97,22 +97,28 @@ export const loadMainSceneAssets = (scene, worldAssetId = null) => {
     'enemy.mushroom.idle',
     'enemy.mushroom.hurt',
     'enemy.mushroom.attack',
+    'enemy.mushroom.attack2',
+    'enemy.mushroom.attack3',
     'enemy.mushroom.death',
     'enemy.vampireBat.walk',
     'enemy.vampireBat.idle',
     'enemy.vampireBat.hurt',
     'enemy.vampireBat.attack',
+    'enemy.vampireBat.attack2',
+    'enemy.vampireBat.attack3',
     'enemy.vampireBat.death',
     'enemy.goblinKing.walk',
     'enemy.goblinKing.idle',
     'enemy.goblinKing.hurt',
     'enemy.goblinKing.attack',
+    'enemy.goblinKing.attack2',
+    'enemy.goblinKing.attack3',
     'enemy.goblinKing.death',
   ], {
     ...WORLD_PROP_SPRITESHEETS,
     ...ENEMY_SPRITESHEETS,
   });
-  loadSpritesheets(scene, ['healerNpc'], NPC_SPRITESHEETS);
+  loadSpritesheets(scene, ['healerNpc', 'librarianWitchNpc', 'miroAlchemistNpc'], NPC_SPRITESHEETS);
 };
 
 /**

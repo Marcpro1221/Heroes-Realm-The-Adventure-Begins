@@ -33,9 +33,11 @@ export default class BaseWorldScene extends Phaser.Scene {
     this.healerNpc = null;
     this.healerUi = null;
     this.worldProps = {};
-    this.roomEntrance = null;
+    this.roomEntrances = [];
+    this.activeRoomEntrance = null;
     this.roomEntranceUi = null;
     this.roomEntranceDismissed = false;
+    this.roomEntranceAwaitingReentry = true;
     this.collectibleGroup = null;
   }
 
@@ -221,7 +223,15 @@ export default class BaseWorldScene extends Phaser.Scene {
   }
 
   getScenePlatformPrefix() {
-    return this.scene.key === SCENE_KEYS.GRASSY_BIOME_1 ? 'S1' : 'S2';
+    if (this.scene.key === SCENE_KEYS.GRASSY_BIOME_1) {
+      return 'S1';
+    }
+
+    if (this.scene.key === SCENE_KEYS.GRASSY_BIOME_2) {
+      return 'S2';
+    }
+
+    return 'INT';
   }
 
   createPlatformMarker(platform, label) {
@@ -358,14 +368,14 @@ export default class BaseWorldScene extends Phaser.Scene {
 
     this.worldProps[propKey] = prop;
 
-    if (propKey === 'potionShop' && propConfig.roomDoorBounds) {
-      this.createPotionShopDoorInteraction(prop, propConfig);
+    if (propConfig.roomDoorBounds) {
+      this.createRoomDoorInteraction(propKey, prop, propConfig);
     }
 
     return prop;
   }
 
-  createPotionShopDoorInteraction(prop, propConfig) {
+  createRoomDoorInteraction(propKey, prop, propConfig) {
     const displayWidth = prop.displayWidth ?? prop.width ?? 0;
     const displayHeight = prop.displayHeight ?? prop.height ?? 0;
     const originX = prop.originX ?? 0.5;
@@ -374,15 +384,19 @@ export default class BaseWorldScene extends Phaser.Scene {
     const propTop = prop.y - (displayHeight * originY);
     const bounds = propConfig.roomDoorBounds;
 
-    this.roomEntrance = {
+    this.roomEntrances.push({
+      key: propKey,
       prop,
+      roomName: propConfig.roomName ?? 'Room',
+      targetSceneKey: propConfig.targetSceneKey ?? null,
+      targetSceneSpawn: propConfig.targetSceneSpawn ?? null,
       doorBounds: new Phaser.Geom.Rectangle(
         propLeft + (displayWidth * bounds.x),
         propTop + (displayHeight * bounds.y),
         displayWidth * bounds.width,
         displayHeight * bounds.height,
       ),
-    };
+    });
   }
 
   buildRoomEntranceDialog() {
@@ -463,7 +477,7 @@ export default class BaseWorldScene extends Phaser.Scene {
   }
 
   updateRoomEntrancePrompt() {
-    if (!this.roomEntrance?.doorBounds || !gameState.player?.body) {
+    if (!(this.roomEntrances?.length > 0) || !gameState.player?.body) {
       return;
     }
 
@@ -473,12 +487,30 @@ export default class BaseWorldScene extends Phaser.Scene {
       gameState.player.body.width,
       gameState.player.body.height,
     );
-    const isOverlappingDoor = Phaser.Geom.Intersects.RectangleToRectangle(playerBodyRect, this.roomEntrance.doorBounds);
+    const overlappingEntrance = this.roomEntrances.find(({ doorBounds }) => (
+      doorBounds && Phaser.Geom.Intersects.RectangleToRectangle(playerBodyRect, doorBounds)
+    )) ?? null;
 
-    if (!isOverlappingDoor) {
+    if (!overlappingEntrance) {
+      this.activeRoomEntrance = null;
       this.roomEntranceDismissed = false;
+      this.roomEntranceAwaitingReentry = false;
       this.closeRoomEntranceDialog(false);
       return;
+    }
+
+    const hasChangedEntrance = this.activeRoomEntrance?.key !== overlappingEntrance.key;
+    this.activeRoomEntrance = overlappingEntrance;
+
+    if (this.roomEntranceAwaitingReentry) {
+      return;
+    }
+
+    if (hasChangedEntrance) {
+      this.roomEntranceDismissed = false;
+      if (this.roomEntranceUi?.visible) {
+        this.openRoomEntranceDialog();
+      }
     }
 
     if (!this.roomEntranceDismissed && !this.roomEntranceUi?.visible) {
@@ -492,6 +524,8 @@ export default class BaseWorldScene extends Phaser.Scene {
     }
 
     this.playerProfile?.close();
+    const activeRoomName = this.activeRoomEntrance?.roomName ?? 'Room';
+    this.roomEntranceUi.title.setText(`Enter ${activeRoomName}`);
     this.roomEntranceUi.visible = true;
     this.roomEntranceUi.elements.forEach((element) => element.setVisible(true));
   }
@@ -510,7 +544,23 @@ export default class BaseWorldScene extends Phaser.Scene {
   }
 
   confirmRoomEntrance() {
+    const targetSceneKey = this.activeRoomEntrance?.targetSceneKey ?? null;
+    const targetSceneSpawn = this.activeRoomEntrance?.targetSceneSpawn ?? null;
     this.closeRoomEntranceDialog(true);
+
+    if (!targetSceneKey || !gameState.player) {
+      return;
+    }
+
+    gameState.roomReturnTarget = {
+      sceneKey: this.scene.key,
+      spawn: {
+        x: gameState.player.x,
+        y: gameState.player.y,
+      },
+    };
+
+    this.transitionToScene(targetSceneKey, targetSceneSpawn, null);
   }
 
   ensureHealerNpcAnimation(textureKey) {
@@ -806,10 +856,12 @@ export default class BaseWorldScene extends Phaser.Scene {
     const targetStandingY = targetSceneConfig?.playerSpawn?.y ?? null;
     const isStanding = Boolean(playerBody?.blocked.down || playerBody?.touching.down);
     const entryDistance = Math.max(12, (playerBody?.width ?? 0) * 3);
-    const preservedY = gameState.player?.y ?? spawnOverride?.y ?? this.sceneConfig?.playerSpawn?.y ?? 0;
+    const targetDefaultSpawn = targetSceneConfig?.playerSpawn ?? this.sceneConfig?.playerSpawn ?? { x: 0, y: 0 };
+    const shouldPreserveCurrentY = Boolean(entryDirection && spawnOverride);
+    const preservedY = gameState.player?.y ?? spawnOverride?.y ?? targetDefaultSpawn.y ?? 0;
     const resolvedSpawn = spawnOverride
-      ? { ...spawnOverride, y: preservedY }
-      : { ...(this.sceneConfig?.playerSpawn ?? {}), y: preservedY };
+      ? { ...spawnOverride, y: shouldPreserveCurrentY ? preservedY : spawnOverride.y }
+      : { ...targetDefaultSpawn };
     gameState.pendingPlayerSnapshot = this.capturePlayerSnapshot(gameState.player);
     gameState.pendingPlayerSpawn = resolvedSpawn;
     gameState.pendingPlayerEntry = entryDirection
@@ -920,8 +972,11 @@ export default class BaseWorldScene extends Phaser.Scene {
   }
 
   createUi() {
-    this.playerHud = new PlayerHud(this);
-    this.playerHud.bindEvents(() => this.togglePlayerProfile());
+    this.playerHud = null;
+    if (this.sceneConfig.showPlayerHud !== false) {
+      this.playerHud = new PlayerHud(this);
+      this.playerHud.bindEvents(() => this.togglePlayerProfile());
+    }
     this.playerProfile = new PlayerProfilePanel(
       this,
       this.getPlayerAttackDamage.bind(this),
@@ -1394,9 +1449,11 @@ export default class BaseWorldScene extends Phaser.Scene {
     this.healerNpc?.npc?.destroy?.();
     this.healerNpc = null;
     this.healerUi = null;
-    this.roomEntrance = null;
+    this.roomEntrances = [];
+    this.activeRoomEntrance = null;
     this.roomEntranceUi = null;
     this.roomEntranceDismissed = false;
+    this.roomEntranceAwaitingReentry = true;
     this.worldProps = {};
     this.staticPlatforms = [];
     this.collectibleGroup?.clear(true, true);

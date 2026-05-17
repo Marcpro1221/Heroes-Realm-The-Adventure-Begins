@@ -5,6 +5,8 @@ import CharacterSelectionScene from '../scenes/CharacterSelectionScene.js';
 import WorldLoadingScene from '../scenes/WorldLoadingScene.js';
 import GrassyBiomeWorldScene from '../scenes/worlds/GrassyBiomeWorldScene.js';
 import GrassyBiomeClimbScene from '../scenes/worlds/GrassyBiomeClimbScene.js';
+import LibraryInteriorScene from '../scenes/worlds/LibraryInteriorScene.js';
+import PotionShopInteriorScene from '../scenes/worlds/PotionShopInteriorScene.js';
 
 /**
  * Phaser game configuration is isolated here so bootstrap code stays minimal.
@@ -25,6 +27,8 @@ const gameConfig = {
     WorldLoadingScene,
     GrassyBiomeWorldScene,
     GrassyBiomeClimbScene,
+    LibraryInteriorScene,
+    PotionShopInteriorScene,
   ],
   physics: PHYSICS_CONFIG,
   callbacks: {

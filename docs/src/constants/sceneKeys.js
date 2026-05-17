@@ -9,4 +9,6 @@ export const SCENE_KEYS = Object.freeze({
   MAIN_GAME: 'GrassyBiomeWorldScene',
   GRASSY_BIOME_1: 'GrassyBiomeWorldScene',
   GRASSY_BIOME_2: 'GrassyBiomeClimbScene',
+  LIBRARY_INTERIOR: 'LibraryInteriorScene',
+  POTION_SHOP_INTERIOR: 'PotionShopInteriorScene',
 });

@@ -5,6 +5,7 @@ export const CHARACTER_IDS = Object.freeze({
   LUNEBLACE: 'luneblace',
   REAPER: 'reaper',
   BLADED_STAFF: 'bladedStaff',
+  AXION: 'axion',
 });
 
 export const CHARACTER_CONFIGS = Object.freeze({
@@ -61,7 +62,6 @@ export const CHARACTER_CONFIGS = Object.freeze({
     effects: {
       spaceSpikesTextureKey: 'luneblace.spaceSpikes',
       spaceSpikesAnimation: { key: 'luneblace.spaceSpikesBurst', start: 0, end: 11, frameRate: 28 },
-      hitEffectAttacks: ['smash', 'thrust'],
       slashPalette: [0x0d1320, 0x4d95ff, 0x4dffba],
       slashScale: 0.98,
       slashAlpha: 1,
@@ -188,7 +188,6 @@ export const CHARACTER_CONFIGS = Object.freeze({
     effects: {
       slashTextureKey: 'reaper.slashEffect',
       slashAnimation: { key: 'reaper.slashEffect', start: 0, end: 9, frameRate: 24 },
-      hitEffectAttacks: ['smash', 'thrust', 'spinAttack', 'specialAttack'],
       slashPalette: [0xffffff, 0xd7b8ff, 0x8b4dff],
       slashScale: 1.02,
       slashAlpha: 1,
@@ -343,7 +342,6 @@ export const CHARACTER_CONFIGS = Object.freeze({
     effects: {
       slashTextureKey: 'bladedStaff.slashEffect',
       slashAnimation: { key: 'bladedStaff.slashEffect', start: 0, end: 9, frameRate: 24 },
-      hitEffectAttacks: ['smash', 'thrust', 'specialAttack'],
       slashPalette: [0xfffdf0, 0xffda6b, 0xff8c32],
       slashScale: 1.04,
       slashAlpha: 0.98,
@@ -542,6 +540,106 @@ export const CHARACTER_CONFIGS = Object.freeze({
       },
     },
   },
+  [CHARACTER_IDS.AXION]: {
+    id: CHARACTER_IDS.AXION,
+    label: 'Axion',
+    combatEnabled: true,
+    baseDamagePercent: { min: 0.08, max: 0.10 },
+    previewTextureKey: 'axion.idle',
+    previewAnimation: { key: 'selection.axion', start: 0, end: 6, frameRate: 10 },
+    spawnTextureKey: 'axion.idle',
+    bodyBounds: { x: 56, y: 60, width: 24, height: 20 },
+    previewHitArea: { x: 56, y: 59, width: 24, height: 22 },
+    animationFrameRanges: {
+      dash: { start: 0, end: 11 },
+      idle: { start: 0, end: 6 },
+      run: { start: 0, end: 7 },
+      jump: { start: 0, end: 3 },
+      fall: { start: 0, end: 3 },
+      smash: { start: 0, end: 9 },
+      thrust: { start: 0, end: 14 },
+      hurt: { start: 0, end: 2 },
+      death: { start: 0, end: 17 },
+    },
+    animationFrameRates: {
+      dash: 18,
+      smash: 18,
+      thrust: 18,
+    },
+    animationRepeats: {
+      smash: 0,
+      thrust: 0,
+    },
+    animationTextures: {
+      dash: 'axion.dash',
+      idle: 'axion.idle',
+      run: 'axion.run',
+      jump: 'axion.jump',
+      fall: 'axion.fall',
+      smash: 'axion.attack2',
+      thrust: 'axion.attack1',
+      death: 'axion.death',
+      hurt: 'axion.hurt',
+    },
+    attackLabels: {
+      smash: 'Double Slash',
+      spinAttack: 'Coming Soon',
+      thrust: 'Single Slash',
+      specialAttack: 'Coming Soon',
+    },
+    effects: {
+      slashPalette: [0xe8ffff, 0x62f5ff, 0x9bffea],
+      slashScale: 1,
+      slashAlpha: 1,
+      slashAngle: 14,
+      slashRadius: 40,
+      slashThickness: 10,
+      slashFlatten: 0.72,
+    },
+    movementProfile: {
+      dash: {
+        durationMs: 170,
+        distance: 520,
+        manaCost: 15,
+        doubleTapWindowMs: 220,
+      },
+    },
+    combatProfile: {
+      smash: {
+        sound: { key: 'smashAttack', volume: 1.05, triggerFrames: [3, 9] },
+        hitCooldownMs: 115,
+        hitbox: {
+          width: 150,
+          height: 52,
+          offsetX: 22,
+          offsetY: -8,
+          activeFrames: [
+            { start: 3, end: 3 },
+            { start: 9, end: 9 },
+          ],
+        },
+        effectFrames: [
+          { start: 3, end: 3, slashAngle: 20, sweepDirection: 1, slashRadius: 48, slashScale: 1.08 },
+          { start: 9, end: 9, slashAngle: -18, sweepDirection: -1, slashRadius: 46, slashScale: 1.08 },
+        ],
+      },
+      thrust: {
+        damagePercentBonusMin: 0.12,
+        damagePercentBonusMax: 0.14,
+        sound: { key: 'thrustAttack', volume: 1.08, triggerFrames: [3] },
+        hitbox: {
+          width: 146,
+          height: 46,
+          offsetX: 18,
+          offsetY: -8,
+          activeFrames: [{ start: 3, end: 5 }],
+        },
+        effectFrames: [
+          { start: 3, end: 5, slashAngle: 12, sweepDirection: 1, slashRadius: 44, slashScale: 1.04 },
+        ],
+      },
+    },
+  },
 });
 
 export const PLAYABLE_CHARACTERS = Object.freeze([
@@ -568,6 +666,15 @@ export const PLAYABLE_CHARACTERS = Object.freeze([
     label: 'Bladed Staff',
     description: 'Staff wielder in movement test',
     previewX: 750,
+    previewY: 545,
+    previewScale: 1.8,
+    titleY: 630,
+  },
+  {
+    id: CHARACTER_IDS.AXION,
+    label: 'Axion',
+    description: 'Aether fighter in progress',
+    previewX: 860,
     previewY: 545,
     previewScale: 1.8,
     titleY: 630,

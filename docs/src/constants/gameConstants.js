@@ -90,9 +90,13 @@ export const ENEMY_SETTINGS = Object.freeze({
   patrolEdgePadding: 18,
   obstacleNudgeDistance: 14,
   chaseSpeed: 88,
+  detectionLoseSightGraceMs: 900,
   hitChaseDurationMs: 2000,
   disengageDelayMs: 2000,
   repositionDurationMs: 900,
+  playerDamageInvincibleMs: 500,
+  playerKnockbackDistance: 10,
+  debugEnemyAi: false,
 });
 
 export const ENEMY_TYPES = Object.freeze({
@@ -109,6 +113,8 @@ export const ENEMY_ARCHETYPES = Object.freeze({
       idle: 'enemy.mushroom.idle',
       hurt: 'enemy.mushroom.hurt',
       attack: 'enemy.mushroom.attack',
+      attack2: 'enemy.mushroom.attack2',
+      attack3: 'enemy.mushroom.attack3',
       death: 'enemy.mushroom.death',
     }),
     scale: 1.5,
@@ -122,6 +128,60 @@ export const ENEMY_ARCHETYPES = Object.freeze({
     contactDamageFixedMin: 5,
     contactDamageFixedMax: 7,
     patrolSpeed: 55.55,
+    combatProfile: Object.freeze({
+      detectionZone: Object.freeze({
+        width: 180,
+        height: 92,
+        offsetX: 58,
+        offsetY: 46,
+      }),
+      attackDetectionZone: Object.freeze({
+        width: 108,
+        height: 68,
+        offsetX: 58,
+        offsetY: 46,
+      }),
+      attackRange: Object.freeze({
+        horizontal: 64,
+        vertical: 42,
+      }),
+      attackHitbox: Object.freeze({
+        width: 56,
+        height: 34,
+        offsetX: 42,
+        offsetY: 54,
+        activeFrames: [{ start: 2, end: 3 }],
+        animationConfigs: Object.freeze({
+          'enemy.mushroom.attack': Object.freeze({
+            width: 56,
+            height: 34,
+            offsetX: 42,
+            offsetY: 75,
+            activeFrames: [{ start: 2, end: 3 }],
+          }),
+          'enemy.mushroom.attack2': Object.freeze({
+            width: 58,
+            height: 36,
+            offsetX: 46,
+            offsetY: 54,
+            activeFrames: [{ start: 2, end: 3 }],
+          }),
+          'enemy.mushroom.attack3': Object.freeze({
+            width: 44,
+            height: 22,
+            offsetX: 24,
+            offsetY: 86,
+            activeFrames: [{ start: 2, end: 3 }],
+            frameHitboxes: Object.freeze([
+              Object.freeze({ start: 2, end: 2, width: 36, height: 18, offsetX: 16, offsetY: 66 }),
+              Object.freeze({ start: 3, end: 3, width: 44, height: 22, offsetX: 26, offsetY: 66 }),
+            ]),
+          }),
+        }),
+      }),
+      attackCooldownMs: 1050,
+      chaseSpeed: 84,
+    }),
   }),
   [ENEMY_TYPES.VAMPIRE_BAT]: Object.freeze({
     textureKey: 'enemy.vampireBat.walk',
@@ -130,6 +190,8 @@ export const ENEMY_ARCHETYPES = Object.freeze({
       idle: 'enemy.vampireBat.idle',
       hurt: 'enemy.vampireBat.hurt',
       attack: 'enemy.vampireBat.attack',
+      attack2: 'enemy.vampireBat.attack2',
+      attack3: 'enemy.vampireBat.attack3',
       death: 'enemy.vampireBat.death',
     }),
     scale: 1.6,
@@ -145,6 +207,33 @@ export const ENEMY_ARCHETYPES = Object.freeze({
     contactDamageMinPercent: 0.30,
     contactDamageMaxPercent: 0.35,
     patrolSpeed: 62,
+    combatProfile: Object.freeze({
+      detectionZone: Object.freeze({
+        width: 240,
+        height: 120,
+        offsetX: 54,
+        offsetY: 40,
+      }),
+      attackDetectionZone: Object.freeze({
+        width: 132,
+        height: 78,
+        offsetX: 54,
+        offsetY: 40,
+      }),
+      attackRange: Object.freeze({
+        horizontal: 86,
+        vertical: 58,
+      }),
+      attackHitbox: Object.freeze({
+        width: 72,
+        height: 30,
+        offsetX: 50,
+        offsetY: 30,
+        activeFrames: [{ start: 1, end: 3 }],
+      }),
+      attackCooldownMs: 900,
+      chaseSpeed: 104,
+    }),
   }),
   [ENEMY_TYPES.GOBLIN_KING]: Object.freeze({
     textureKey: 'enemy.goblinKing.walk',
@@ -153,6 +242,8 @@ export const ENEMY_ARCHETYPES = Object.freeze({
       idle: 'enemy.goblinKing.idle',
       hurt: 'enemy.goblinKing.hurt',
       attack: 'enemy.goblinKing.attack',
+      attack2: 'enemy.goblinKing.attack2',
+      attack3: 'enemy.goblinKing.attack3',
       death: 'enemy.goblinKing.death',
     }),
     scale: 1.6,
@@ -167,6 +258,46 @@ export const ENEMY_ARCHETYPES = Object.freeze({
     contactDamageFixedMin: 16,
     contactDamageFixedMax: 18,
     patrolSpeed: 58,
+    combatProfile: Object.freeze({
+      attackPattern: Object.freeze(['attack2', 'attack3']),
+      detectionZone: Object.freeze({
+        width: 250,
+        height: 118,
+        offsetX: 58,
+        offsetY: 42,
+      }),
+      attackDetectionZone: Object.freeze({
+        width: 108,
+        height: 62,
+        offsetX: 58,
+        offsetY: 42,
+      }),
+      attackRange: Object.freeze({
+        horizontal: 82,
+        vertical: 46,
+      }),
+      attackHitbox: Object.freeze({
+        width: 76,
+        height: 36,
+        offsetX: 42,
+        offsetY: 64,
+        activeFrames: [{ start: 2, end: 3 }],
+        animationConfigs: Object.freeze({
+          'enemy.goblinKing.attack3': Object.freeze({
+            width: 12,
+            height: 12,
+            offsetX: 40,
+            offsetY: 70,
+            activeFrames: [{ start: 3, end: 4 }],
+            projectile: true,
+            projectileSpeed: 280,
+            projectileMaxDistance: 260,
+          }),
+        }),
+      }),
+      attackCooldownMs: 1150,
+      chaseSpeed: 92,
+    }),
   }),
 });
 

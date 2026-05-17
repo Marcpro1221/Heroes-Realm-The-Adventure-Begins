@@ -19,7 +19,6 @@ export default class EnemyManager {
     this.helpers = helpers;
     this.activeEnemyCount = 0;
     this.enemyRespawnCounts = {};
-    this.playerEnemyContactStartedAt = null;
   }
 
   /**
@@ -71,6 +70,7 @@ export default class EnemyManager {
     enemy.animationKeys = enemyConfig.animationKeys;
     enemy.bodyOffsets = enemyConfig.bodyOffsets;
     enemy.patrolSpeed = enemyConfig.patrolSpeed ?? enemy.patrolSpeed;
+    enemy.configureCombatProfile(enemyConfig.combatProfile);
     enemy.setPatrolBounds(
       enemyPos.patrolMinX ?? (enemyPos.x - 120),
       enemyPos.patrolMaxX ?? (enemyPos.x + 120),
@@ -79,6 +79,7 @@ export default class EnemyManager {
     enemy.maxHp = enemyConfig.maxHp ?? ENEMY_SETTINGS.maxHp;
     enemy.currentHp = enemy.maxHp;
     enemy.defense = enemyConfig.defense ?? 0;
+    enemy.enemyDamage = enemyConfig.contactDamageFixedMax ?? 10;
     enemy.isHurting = false;
     enemy.isDead = false;
     enemy.lastDamageByAttack = {};
@@ -95,7 +96,8 @@ export default class EnemyManager {
 
     this.scene.physics.add.collider(enemy, gameState.platforms);
     this.scene.physics.add.collider(enemy, gameState.movingPlatform);
-    this.scene.physics.add.overlap(gameState.player, enemy, this.handlePlayerEnemyOverlap, null, this);
+    this.scene.physics.add.overlap(gameState.player.playerHurtBox, enemy.enemyHitBox, () => this.handleEnemyAttackHit(gameState.player, enemy), null, this);
+    this.scene.physics.add.overlap(gameState.player.playerHurtBox, enemy.projectileHitBox, () => this.handleEnemyAttackHit(gameState.player, enemy), null, this);
     this.scene.physics.add.overlap(enemy, gameState.player.swordHitBox, () => this.damageEnemy(enemy, 'smash'), null, this);
     this.scene.physics.add.overlap(enemy, gameState.player.spinHitBox, () => this.damageEnemy(enemy, 'spinAttack'), null, this);
     this.scene.physics.add.overlap(enemy, gameState.player.thrustAttackHitBox, () => this.damageEnemy(enemy, 'thrust'), null, this);
@@ -108,8 +110,6 @@ export default class EnemyManager {
    * Updates every active enemy once per frame.
    */
   update() {
-    this.updatePlayerEnemyContactState();
-
     const enemies = gameState.enemyGroup?.getChildren?.();
     if (!enemies?.length) {
       return;
@@ -117,66 +117,49 @@ export default class EnemyManager {
 
     enemies.forEach((enemy) => {
       // Skip removed or inactive enemies so the loop only touches valid objects.
-      if (!enemy.active || enemy.isDead || !enemy.body || !enemy.detectionZone || !enemy.enemyHitBox) {
+      if (!enemy.active || enemy.isDead || !enemy.body || !enemy.detectionZone || !enemy.attackDetectionZone || !enemy.enemyHitBox) {
         return;
       }
 
-      enemy.updateMovement(ENEMY_SETTINGS);
+      enemy.updateMovement(ENEMY_SETTINGS, gameState.player);
       enemy.updateDetectionZones();
-      if (!enemy.isHurting && enemy.anims.currentAnim?.key !== enemy.animationKeys.walk) {
-        enemy.anims.play(enemy.animationKeys.walk, true);
+      const nextAnimationKey = enemy.getPreferredAnimationKey?.() ?? enemy.animationKeys.walk;
+      if (!enemy.isHurting || nextAnimationKey === enemy.animationKeys.hurt) {
+        if (enemy.anims.currentAnim?.key !== nextAnimationKey) {
+          enemy.anims.play(nextAnimationKey, true);
+        }
       }
-      enemy.canDetectPlayer(gameState.player);
       this.updateEnemyHpBar(enemy);
     });
   }
 
   /**
-   * Tracks whether the player is still overlapping any active enemy body.
+   * Applies one enemy attack hit to the player through the enemy attack hitbox.
    */
-  updatePlayerEnemyContactState() {
-    const player = gameState.player;
-    if (!player?.body || !gameState.enemyGroup) {
-      this.playerEnemyContactStartedAt = null;
+  handleEnemyAttackHit(player, enemy) {
+    if (!player?.body || !player?.playerHurtBox?.body || !enemy?.body) {
       return;
     }
 
-    const isTouchingAnyEnemy = this.scene.physics.overlap(player, gameState.enemyGroup);
-    if (!isTouchingAnyEnemy) {
-      this.playerEnemyContactStartedAt = null;
+    if (!enemy.canDealAttackDamage()) {
       return;
     }
 
-    if (this.playerEnemyContactStartedAt === null) {
-      this.playerEnemyContactStartedAt = this.scene.time.now;
-    }
-  }
-
-  /**
-   * Applies touch damage from the enemy body to the player.
-   * This overlap is registered in `spawnEnemy()`, but the final damage values
-   * are still resolved through helper callbacks injected by `MainScene`.
-   */
-  handlePlayerEnemyOverlap(player, enemy) {
     if (!enemy.active || enemy.isDead || player.isDead || player.isUntouchable || this.scene.isRestarting) {
       return;
     }
 
     const currentTime = this.scene.time.now;
-    if (this.playerEnemyContactStartedAt === null) {
-      this.playerEnemyContactStartedAt = currentTime;
-    }
-
-    if ((currentTime - this.playerEnemyContactStartedAt) < ENEMY_SETTINGS.contactDamageOverlapDelayMs) {
-      return;
-    }
-
-    if (player.isHurting) {
-      return;
-    }
-
     const lastContactDamageAt = player.lastContactDamageAt ?? -Infinity;
-    if ((currentTime - lastContactDamageAt) < ENEMY_SETTINGS.contactDamageIntervalMs) {
+    const canApplyDamage = !player.isHurting
+      && !player.isEnemyDamageInvincible?.(currentTime)
+      && (currentTime - lastContactDamageAt) >= ENEMY_SETTINGS.contactDamageIntervalMs;
+    const knockbackDirection = this.getEnemyAttackKnockbackDirection(player, enemy);
+
+    enemy.markAttackDamageDealt();
+    this.applyPlayerKnockback(player, enemy, knockbackDirection);
+
+    if (!canApplyDamage) {
       return;
     }
 
@@ -197,7 +180,7 @@ export default class EnemyManager {
     const damage = Math.max(0, enemyDamage - defenseValue);
 
     player.lastContactDamageAt = currentTime;
-    enemy.lastAttackAt = currentTime;
+    player.grantEnemyDamageInvincibility?.(ENEMY_SETTINGS.playerDamageInvincibleMs);
 
     if (damage <= 0) {
       player.showDamagePopup(player.x, player.y, 'Blocked', '#8af5ff', 700, 50);
@@ -224,6 +207,74 @@ export default class EnemyManager {
     });
   }
 
+  getEnemyAttackKnockbackDirection(player, enemy) {
+    const projectileVelocityX = enemy.activeProjectile?.velocityX ?? 0;
+    if (Math.abs(projectileVelocityX) > 0.001) {
+      return projectileVelocityX > 0 ? 1 : -1;
+    }
+
+    if (Math.abs(enemy.patrolDirection ?? 0) > 0) {
+      return enemy.patrolDirection > 0 ? 1 : -1;
+    }
+
+    if (typeof enemy.flipX === 'boolean') {
+      return enemy.flipX ? 1 : -1;
+    }
+
+    return enemy.body.center.x <= player.body.center.x ? 1 : -1;
+  }
+
+  applyPlayerKnockback(player, enemy, knockbackDirection = this.getEnemyAttackKnockbackDirection(player, enemy)) {
+    if (!player?.body || !enemy?.body) {
+      return;
+    }
+
+    const knockbackDistance = ENEMY_SETTINGS.playerKnockbackDistance ?? 6;
+    const bodyLeftOffset = player.x - player.body.left;
+    const bodyRightOffset = player.body.right - player.x;
+    const minX = bodyLeftOffset;
+    const maxX = gameState.width - bodyRightOffset;
+    const startX = player.x;
+    const nextX = Phaser.Math.Clamp(
+      player.x + (knockbackDirection * knockbackDistance),
+      minX,
+      maxX,
+    );
+
+    player.enemyKnockbackTween?.stop();
+    player.enemyKnockbackTween = this.scene.tweens.add({
+      targets: player,
+      x: nextX,
+      duration: 95,
+      ease: 'Cubic.easeOut',
+      onStart: () => {
+        player.setVelocityX(0);
+      },
+      onUpdate: () => {
+        if (!player.active || !player.body) {
+          return;
+        }
+
+        player.body.updateFromGameObject();
+        player.updatePlayerHurtBox?.();
+      },
+      onComplete: () => {
+        if (!player.active || !player.body) {
+          return;
+        }
+
+        player.setPosition(nextX, player.y);
+        player.body.updateFromGameObject();
+        player.updatePlayerHurtBox?.();
+        player.enemyKnockbackTween = null;
+      },
+    });
+
+    if (nextX === startX) {
+      player.enemyKnockbackTween?.complete?.();
+    }
+  }
+
   /**
    * Applies weapon damage to an enemy based on the active player attack.
    * The hitbox overlaps come from `Player`, and the damage rules come from
@@ -231,6 +282,10 @@ export default class EnemyManager {
    */
   damageEnemy(enemy, attackType) {
     if (!enemy.active || enemy.isDead) {
+      return;
+    }
+
+    if (attackType === 'specialAttack' && !gameState.player?.canSpecialAttackHitEnemy?.(enemy)) {
       return;
     }
 
@@ -290,7 +345,7 @@ export default class EnemyManager {
       }
 
       enemy.isHurting = false;
-      enemy.anims.play(enemy.animationKeys.walk, true);
+      enemy.resumeMovementState(ENEMY_SETTINGS);
     });
   }
 
@@ -377,7 +432,10 @@ export default class EnemyManager {
     enemy.setVelocity(0, 0);
     enemy.body.enable = false;
     enemy.detectionZone?.destroy();
+    enemy.attackDetectionZone?.destroy();
     enemy.enemyHitBox?.destroy();
+    enemy.projectileHitBox?.destroy();
+    enemy.stateLabel?.destroy();
     enemy.anims.play(enemy.animationKeys.death, true);
 
     this.scene.grantEnemyExp(gameState.player, enemy);
@@ -397,11 +455,13 @@ export default class EnemyManager {
    * Clears transient enemy visuals during scene shutdown.
    */
   cleanup() {
-    this.playerEnemyContactStartedAt = null;
     gameState.enemyGroup?.getChildren().forEach((enemy) => {
       enemy.hpBar?.destroy();
       enemy.detectionZone?.destroy();
+      enemy.attackDetectionZone?.destroy();
       enemy.enemyHitBox?.destroy();
+      enemy.projectileHitBox?.destroy();
+      enemy.stateLabel?.destroy();
       enemy.anims?.stop();
     });
   }

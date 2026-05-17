@@ -172,7 +172,21 @@ export const registerEnemyAnimations = (scene) => {
       animationKey: 'enemy.mushroom.attack',
       frameRange: { start: 0, end: 3 },
       frameRate: 10,
-      repeat: -1,
+      repeat: 0,
+    },
+    {
+      textureKey: 'enemy.mushroom.attack2',
+      animationKey: 'enemy.mushroom.attack2',
+      frameRange: { start: 0, end: 3 },
+      frameRate: 10,
+      repeat: 0,
+    },
+    {
+      textureKey: 'enemy.mushroom.attack3',
+      animationKey: 'enemy.mushroom.attack3',
+      frameRange: { start: 0, end: 3 },
+      frameRate: 10,
+      repeat: 0,
     },
     {
       textureKey: 'enemy.mushroom.death',
@@ -207,7 +221,21 @@ export const registerEnemyAnimations = (scene) => {
       animationKey: 'enemy.vampireBat.attack',
       frameRange: { start: 0, end: 3 },
       frameRate: 10,
-      repeat: -1,
+      repeat: 0,
+    },
+    {
+      textureKey: 'enemy.vampireBat.attack2',
+      animationKey: 'enemy.vampireBat.attack2',
+      frameRange: { start: 0, end: 3 },
+      frameRate: 10,
+      repeat: 0,
+    },
+    {
+      textureKey: 'enemy.vampireBat.attack3',
+      animationKey: 'enemy.vampireBat.attack3',
+      frameRange: { start: 0, end: 3 },
+      frameRate: 10,
+      repeat: 0,
     },
     {
       textureKey: 'enemy.vampireBat.death',
@@ -242,7 +270,21 @@ export const registerEnemyAnimations = (scene) => {
       animationKey: 'enemy.goblinKing.attack',
       frameRange: { start: 0, end: 3 },
       frameRate: 10,
-      repeat: -1,
+      repeat: 0,
+    },
+    {
+      textureKey: 'enemy.goblinKing.attack2',
+      animationKey: 'enemy.goblinKing.attack2',
+      frameRange: { start: 0, end: 3 },
+      frameRate: 10,
+      repeat: 0,
+    },
+    {
+      textureKey: 'enemy.goblinKing.attack3',
+      animationKey: 'enemy.goblinKing.attack3',
+      frameRange: { start: 0, end: 3 },
+      frameRate: 10,
+      repeat: 0,
     },
     {
       textureKey: 'enemy.goblinKing.death',
@@ -271,4 +313,22 @@ export const registerWorldAnimations = (scene) => {
     frameRate: 10,
     repeat: -1,
   });
+
+  if (scene.textures.exists('librarianWitchNpc')) {
+    ensureAnimation(scene, {
+      key: 'npc.librarianWitch.idle',
+      frames: scene.anims.generateFrameNumbers('librarianWitchNpc', { start: 0, end: 5 }),
+      frameRate: 6,
+      repeat: -1,
+    });
+  }
+
+  if (scene.textures.exists('miroAlchemistNpc')) {
+    ensureAnimation(scene, {
+      key: 'npc.miroAlchemist.idle',
+      frames: scene.anims.generateFrameNumbers('miroAlchemistNpc', { start: 0, end: 5 }),
+      frameRate: 6,
+      repeat: -1,
+    });
+  }
 };

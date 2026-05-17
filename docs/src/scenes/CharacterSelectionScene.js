@@ -175,7 +175,7 @@ export default class CharacterSelectionScene extends Phaser.Scene {
     this.developerCreditText?.setPosition(24, height - 18);
 
     const baseGroundY = height * 0.91;
-    const slotXPositions = [0.43, 0.56, 0.67];
+    const slotXPositions = [0.38, 0.50, 0.62, 0.74];
 
     PLAYABLE_CHARACTERS.forEach((character, index) => {
       const card = this.selectionCards.get(character.id);

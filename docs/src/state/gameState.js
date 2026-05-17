@@ -20,6 +20,7 @@ export const gameState = {
   pendingPlayerSnapshot: null,
   pendingPlayerSpawn: null,
   pendingPlayerEntry: null,
+  roomReturnTarget: null,
   sceneReturnPositions: {},
   portal: null,
 };

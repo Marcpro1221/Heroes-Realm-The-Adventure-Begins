@@ -41,6 +41,9 @@ export const WORLD_IMAGE_ASSETS = Object.freeze({
     }),
     props: Object.freeze({
       potionShop: buildWorldAssetPath(WORLD_IDS.GRASSY_BIOME, 'House, Shop, Interior, Exterior', 'PotionShop.png'),
+      library: buildWorldAssetPath(WORLD_IDS.GRASSY_BIOME, 'House, Shop, Interior, Exterior', 'Library.png'),
+      libraryInterior: buildWorldAssetPath(WORLD_IDS.GRASSY_BIOME, 'House, Shop, Interior, Exterior', 'LibraryLatestInteriorDesign.png'),
+      potionShopInterior: buildWorldAssetPath(WORLD_IDS.GRASSY_BIOME, 'House, Shop, Interior, Exterior', 'PotionShopInterior-flatfloor.png'),
     }),
   }),
 });
@@ -129,6 +132,15 @@ export const CHARACTER_SPRITESHEETS = Object.freeze({
   'bladedStaff.smokeIn': { path: buildAssetPath('Sprite_Sheet_Bladed_Staff', 'Smoke In.png'), frameWidth: 144, frameHeight: 144 },
   'bladedStaff.smokeOut': { path: buildAssetPath('Sprite_Sheet_Bladed_Staff', 'Smoke Out.png'), frameWidth: 144, frameHeight: 144 },
   'bladedStaff.specialAttack': { path: buildAssetPath('Sprite_Sheet_Bladed_Staff', 'Special Skill.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.attack1': { path: buildAssetPath('Sprite_Sheet_Axion', 'Attack 1.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.attack2': { path: buildAssetPath('Sprite_Sheet_Axion', 'Attack 2.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.dash': { path: buildAssetPath('Sprite_Sheet_Axion', 'Dash.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.death': { path: buildAssetPath('Sprite_Sheet_Axion', 'Death.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.fall': { path: buildAssetPath('Sprite_Sheet_Axion', 'Fall.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.hurt': { path: buildAssetPath('Sprite_Sheet_Axion', 'Hurt.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.idle': { path: buildAssetPath('Sprite_Sheet_Axion', 'Idle.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.jump': { path: buildAssetPath('Sprite_Sheet_Axion', 'Jump.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.run': { path: buildAssetPath('Sprite_Sheet_Axion', 'Run.png'), frameWidth: 144, frameHeight: 144 },
 });
 
 /**
@@ -139,19 +151,27 @@ export const ENEMY_SPRITESHEETS = Object.freeze({
   'enemy.mushroom.idle': { path: buildAssetPath('Huge_mushroom', 'HugeMushroom_idle.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.mushroom.hurt': { path: buildAssetPath('Huge_mushroom', 'HugeMushroom_hurt.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.mushroom.attack': { path: buildAssetPath('Huge_mushroom', 'HugeMushroom_attack1.png'), frameWidth: 72, frameHeight: 72 },
+  'enemy.mushroom.attack2': { path: buildAssetPath('Huge_mushroom', 'HugeMushroom_attack2.png'), frameWidth: 72, frameHeight: 72 },
+  'enemy.mushroom.attack3': { path: buildAssetPath('Huge_mushroom', 'HugeMushroom_attack4.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.mushroom.death': { path: buildAssetPath('Huge_mushroom', 'HugeMushroom_death.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.vampireBat.walk': { path: buildAssetPath('Boss Mobs', '3 Vampire bat', 'VampireBat_walk.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.vampireBat.idle': { path: buildAssetPath('Boss Mobs', '3 Vampire bat', 'VampireBat_idle.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.vampireBat.hurt': { path: buildAssetPath('Boss Mobs', '3 Vampire bat', 'VampireBat_hurt.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.vampireBat.attack': { path: buildAssetPath('Boss Mobs', '3 Vampire bat', 'VampireBat_attack1.png'), frameWidth: 72, frameHeight: 72 },
+  'enemy.vampireBat.attack2': { path: buildAssetPath('Boss Mobs', '3 Vampire bat', 'VampireBat_attack2.png'), frameWidth: 72, frameHeight: 72 },
+  'enemy.vampireBat.attack3': { path: buildAssetPath('Boss Mobs', '3 Vampire bat', 'VampireBat_attack3.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.vampireBat.death': { path: buildAssetPath('Boss Mobs', '3 Vampire bat', 'VampireBat_death.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.goblinKing.walk': { path: buildAssetPath('Boss Mobs', '2 Goblin king', 'GoblinKing_walk.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.goblinKing.idle': { path: buildAssetPath('Boss Mobs', '2 Goblin king', 'GoblinKing_idle.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.goblinKing.hurt': { path: buildAssetPath('Boss Mobs', '2 Goblin king', 'GoblinKing_hurt.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.goblinKing.attack': { path: buildAssetPath('Boss Mobs', '2 Goblin king', 'GoblinKing_attack1.png'), frameWidth: 72, frameHeight: 72 },
+  'enemy.goblinKing.attack2': { path: buildAssetPath('Boss Mobs', '2 Goblin king', 'GoblinKing_attack3.png'), frameWidth: 72, frameHeight: 72 },
+  'enemy.goblinKing.attack3': { path: buildAssetPath('Boss Mobs', '2 Goblin king', 'GoblinKing_attack4.png'), frameWidth: 72, frameHeight: 72 },
   'enemy.goblinKing.death': { path: buildAssetPath('Boss Mobs', '2 Goblin king', 'GoblinKing_death.png'), frameWidth: 72, frameHeight: 72 },
 });
 
 export const NPC_SPRITESHEETS = Object.freeze({
   healerNpc: { path: buildAssetPath('NPC', 'GirlHealerNPC.png'), frameWidth: 32, frameHeight: 48 },
+  librarianWitchNpc: { path: buildAssetPath('NPC', 'LibrarianWitchNPC.png'), frameWidth: 96, frameHeight: 192 },
+  miroAlchemistNpc: { path: buildAssetPath('NPC', 'MiroAlchemistNPC.png'), frameWidth: 96, frameHeight: 192 },
 });

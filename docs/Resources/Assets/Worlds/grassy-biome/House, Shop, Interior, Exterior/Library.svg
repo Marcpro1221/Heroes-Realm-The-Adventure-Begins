@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 360">
+  <defs>
+    <linearGradient id="skyGlow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f4e6bb"/>
+      <stop offset="100%" stop-color="#d8c07d"/>
+    </linearGradient>
+    <linearGradient id="roofMain" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7b2530"/>
+      <stop offset="100%" stop-color="#4b1219"/>
+    </linearGradient>
+    <linearGradient id="roofSide" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5a1820"/>
+      <stop offset="100%" stop-color="#2e090e"/>
+    </linearGradient>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#dfd3b0"/>
+      <stop offset="100%" stop-color="#b89e72"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#735135"/>
+      <stop offset="100%" stop-color="#4f341f"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d8f4ff"/>
+      <stop offset="100%" stop-color="#87b7c8"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="280" cy="330" rx="188" ry="22" fill="#000000" opacity="0.18"/>
+  <path d="M87 152 L280 58 L473 152 L442 168 L280 89 L118 168 Z" fill="url(#roofMain)"/>
+  <path d="M280 58 L473 152 L473 206 L280 112 Z" fill="url(#roofSide)"/>
+  <path d="M280 58 L87 152 L87 206 L280 112 Z" fill="#8d3340"/>
+  <rect x="118" y="160" width="324" height="136" rx="8" fill="url(#wall)"/>
+  <path d="M118 160 H442 V182 H118 Z" fill="#9a7a47" opacity="0.65"/>
+  <rect x="240" y="192" width="80" height="104" rx="8" fill="url(#wood)"/>
+  <rect x="251" y="205" width="58" height="80" rx="4" fill="#5c3b25"/>
+  <circle cx="298" cy="246" r="4" fill="#d8c07d"/>
+  <rect x="143" y="191" width="70" height="88" rx="10" fill="#61482f"/>
+  <rect x="347" y="191" width="70" height="88" rx="10" fill="#61482f"/>
+  <rect x="151" y="199" width="54" height="72" rx="8" fill="url(#glass)"/>
+  <rect x="355" y="199" width="54" height="72" rx="8" fill="url(#glass)"/>
+  <path d="M178 199 V271 M151 235 H205" stroke="#4e3521" stroke-width="6" opacity="0.6"/>
+  <path d="M382 199 V271 M355 235 H409" stroke="#4e3521" stroke-width="6" opacity="0.6"/>
+  <rect x="216" y="134" width="128" height="36" rx="8" fill="#55361f"/>
+  <rect x="223" y="141" width="114" height="22" rx="6" fill="url(#skyGlow)"/>
+  <text x="280" y="157" text-anchor="middle" font-family="Georgia, serif" font-size="18" font-weight="700" fill="#4d2f16">LIBRARY</text>
+  <rect x="102" y="150" width="16" height="146" fill="#725638"/>
+  <rect x="442" y="150" width="16" height="146" fill="#725638"/>
+  <rect x="94" y="296" width="372" height="16" rx="8" fill="#826240"/>
+  <path d="M112 134 L144 118 L176 134" stroke="#d8c07d" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M384 134 L416 118 L448 134" stroke="#d8c07d" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M270 108 H290" stroke="#d8c07d" stroke-width="8" stroke-linecap="round"/>
+  <path d="M280 98 V118" stroke="#d8c07d" stroke-width="8" stroke-linecap="round"/>
+</svg>

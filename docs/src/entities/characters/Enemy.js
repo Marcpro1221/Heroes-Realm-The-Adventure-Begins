@@ -1,10 +1,17 @@
 import Hitbox from '../combat/Hitbox.js';
 import Character from './Character.js';
 
+export const ENEMY_STATES = Object.freeze({
+  IDLE: 'idle',
+  CHASE: 'chase',
+  ATTACK: 'attack',
+  COOLDOWN: 'cooldown',
+  RETURN: 'return',
+});
+
 /**
- * Basic patrol enemy used by the current world scene.
- * `EnemyManager` owns this entity's lifecycle, while the class itself owns
- * patrol movement, facing, knockback state, and local helper hitboxes.
+ * Smart enemy AI driven by one update loop.
+ * Body collision, detection, attack range, and attack hitbox stay separate.
  */
 export default class Enemy extends Character {
   constructor(scene, x, y, texture) {
@@ -14,100 +21,278 @@ export default class Enemy extends Character {
     this.setDepth(10);
     this.setScrollFactor(1);
 
-    this.patrolStartX = x;
-    this.patrolEndX = x;
+    this.spawnX = x;
+    this.spawnY = y;
+    this.homeX = x;
+    this.homeY = y;
     this.patrolMinX = x - 120;
     this.patrolMaxX = x + 120;
-    this.patrolSpeed = 55.55;
     this.patrolDirection = 1;
-    this.patrolRangeWidth = this.patrolMaxX - this.patrolMinX;
+    this.patrolSpeed = 55.55;
+    this.moveSpeed = this.patrolSpeed;
+    this.returnSpeed = this.patrolSpeed;
+    this.enemyDamage = 10;
+    this.detectionRange = 250;
+    this.attackRange = 50;
+    this.attackCooldown = 1200;
+    this.detectionLoseSightGraceMs = 900;
+    this.currentState = ENEMY_STATES.IDLE;
+    this.canAttack = true;
+    this.isPlayerDetected = false;
+    this.isPlayerInAttackRange = false;
+    this.isAttacking = false;
+    this.attackHasDealtDamage = false;
+    this.attackCooldownEndsAt = -Infinity;
+    this.lastDetectedPlayerAt = -Infinity;
+    this.lastAttackStartedAt = -Infinity;
+    this.lastObstacleTurnAt = -Infinity;
+    this.lastHitLocation = { x, y };
+    this.attackPattern = ['attack', 'attack2', 'attack3'];
+    this.attackPatternIndex = 0;
+    this.activeAttackAnimationKey = null;
+    this.activeProjectile = null;
+    this.patrolTween = null;
+    this.patrolTweenTargetX = null;
+    this.patrolTweenMode = null;
+    this.lastPatrolTweenX = x;
     this.knockbackVelocityX = 0;
     this.knockbackDamping = 0.84;
-    this.knockbackFacingLock = null;
-    this.knockbackFacingThreshold = 6;
-    this.isChasingPlayer = false;
-    this.isRepositioning = false;
-    this.repositionTween = null;
-    this.tweenTargetX = null;
-    this.savedTweenOriginX = x;
-    this.discardedTweenTargetX = null;
-    this.hitChaseTarget = null;
-    this.hitChaseEndAt = -Infinity;
-    this.lastHitLocation = null;
-    this.lastProvokedAt = -Infinity;
-    this.lastAttackAt = -Infinity;
-    this.lastObstacleTurnAt = -Infinity;
     this.bodyOffsets = { left: 30, right: 0, y: 7 };
     this.animationKeys = { walk: texture, idle: texture, hurt: texture, attack: texture, death: texture };
+    this.debugEnabled = false;
+    this.isMovingHorizontally = false;
+    this.lastFrameX = x;
+    this.combatProfile = {
+      detectionZone: { width: 250, height: 100 },
+      attackDetectionZone: { width: 50, height: 80 },
+      attackRange: { horizontal: 50, vertical: 40 },
+      attackHitbox: {
+        width: 65,
+        height: 30,
+        offsetX: 20,
+        offsetY: 90,
+        activeFrames: [{ start: 1, end: 2 }],
+      },
+      attackCooldownMs: 1200,
+      chaseSpeed: null,
+    };
 
-    this.detectionZone = new Hitbox(scene, this.x, this.y, 120, 100);
-    this.enemyHitBox = new Hitbox(scene, this.x, this.y, 65, 30);
+    this.detectionZone = new Hitbox(scene, this.x, this.y, 250, 100, 0x59d9ff, 0.12);
+    this.attackDetectionZone = new Hitbox(scene, this.x, this.y, 50, 80, 0xffc857, 0.12);
+    this.attackHitBox = new Hitbox(scene, this.x, this.y, 65, 30, 0xff5d73, 0.18);
+    this.projectileHitBox = new Hitbox(scene, this.x, this.y, 12, 12, 0xffa94d, 0.18);
+    this.enemyHitBox = this.attackHitBox;
+    this.stateLabel = scene.add.text(this.x, this.y - 18, this.currentState.toUpperCase(), {
+      fontFamily: 'Arial',
+      fontSize: '11px',
+      color: '#fef3c7',
+      stroke: '#111827',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(18).setVisible(false);
+
+    this.detectionZone.body.enable = true;
+    this.attackDetectionZone.body.enable = true;
+    this.attackHitBox.body.enable = false;
+    this.projectileHitBox.body.enable = false;
+    this.on('animationcomplete', this.handleAnimationComplete, this);
   }
 
-  /**
-   * Handles patrol movement, knockback decay, and facing updates.
-   */
-  updateMovement(enemySettings) {
+  configureCombatProfile(combatProfile = {}) {
+    this.combatProfile = {
+      ...this.combatProfile,
+      ...combatProfile,
+      detectionZone: {
+        ...this.combatProfile.detectionZone,
+        ...(combatProfile?.detectionZone ?? {}),
+      },
+      attackDetectionZone: {
+        ...this.combatProfile.attackDetectionZone,
+        ...(combatProfile?.attackDetectionZone ?? {}),
+      },
+      attackRange: {
+        ...this.combatProfile.attackRange,
+        ...(combatProfile?.attackRange ?? {}),
+      },
+      attackHitbox: {
+        ...this.combatProfile.attackHitbox,
+        ...(combatProfile?.attackHitbox ?? {}),
+      },
+      attackPattern: combatProfile?.attackPattern ?? this.attackPattern,
+    };
+
+    const detectionZoneConfig = this.combatProfile.detectionZone;
+    const attackDetectionZoneConfig = this.combatProfile.attackDetectionZone;
+    const attackHitboxConfig = this.combatProfile.attackHitbox;
+
+    this.detectionZone.width = detectionZoneConfig.width;
+    this.detectionZone.height = detectionZoneConfig.height;
+    this.detectionZone.body.setSize(detectionZoneConfig.width, detectionZoneConfig.height, true);
+
+    this.attackDetectionZone.width = attackDetectionZoneConfig.width;
+    this.attackDetectionZone.height = attackDetectionZoneConfig.height;
+    this.attackDetectionZone.body.setSize(attackDetectionZoneConfig.width, attackDetectionZoneConfig.height, true);
+
+    this.attackHitBox.width = attackHitboxConfig.width;
+    this.attackHitBox.height = attackHitboxConfig.height;
+    this.attackHitBox.body.setSize(attackHitboxConfig.width, attackHitboxConfig.height, true);
+
+    this.detectionRange = detectionZoneConfig.width;
+    this.attackRange = attackDetectionZoneConfig.width;
+    this.moveSpeed = this.combatProfile.chaseSpeed ?? this.patrolSpeed;
+    this.returnSpeed = Math.max(this.patrolSpeed, this.moveSpeed * 0.8);
+    this.attackCooldown = this.combatProfile.attackCooldownMs ?? this.attackCooldown;
+    this.attackPattern = Array.isArray(this.combatProfile.attackPattern) && this.combatProfile.attackPattern.length
+      ? [...this.combatProfile.attackPattern]
+      : ['attack', 'attack2', 'attack3'];
+    this.attackPatternIndex = 0;
+  }
+
+  updateMovement(enemySettings, player = null) {
     const currentTime = this.scene.time.now;
-    if (this.isChasingPlayer && currentTime >= this.hitChaseEndAt) {
-      this.finishHitChase(enemySettings);
+    this.debugEnabled = Boolean(enemySettings?.debugEnemyAi);
+    this.detectionLoseSightGraceMs = enemySettings?.detectionLoseSightGraceMs ?? this.detectionLoseSightGraceMs;
+    this.canAttack = currentTime >= this.attackCooldownEndsAt;
+    this.updateDetectionZones();
+    this.refreshPlayerAwareness(player, currentTime);
+
+    if (this.isHurting) {
+      this.stopPatrolTween();
+      this.setVelocityX(this.knockbackVelocityX);
+      this.updateKnockback();
+      this.updateMovementMetrics();
+      this.updateAttackHitbox();
+      this.updateDebugVisuals();
+      return;
     }
 
-    if (this.isRepositioning) {
+    if (this.isAttacking) {
+      this.stopPatrolTween();
+      this.setCurrentState(ENEMY_STATES.ATTACK);
+      this.setVelocityX(0);
+      this.updateMovementMetrics();
+      this.updateAttackHitbox();
+      this.updateDebugVisuals();
+      return;
+    }
+
+    const isWithinDetectionGrace = this.isWithinDetectionGrace(currentTime);
+
+    if (this.isPlayerDetected && this.isPlayerInAttackRange && this.canAttack) {
+      this.startAttack(player, currentTime);
+    } else if (this.isPlayerDetected && this.isPlayerInAttackRange) {
+      this.updateCooldownState(player);
+    } else if (this.isPlayerDetected) {
+      this.updateChaseState(player, enemySettings);
+    } else if (isWithinDetectionGrace) {
+      this.updateChaseSearchState(enemySettings);
+    } else if (this.currentState === ENEMY_STATES.RETURN || !this.isAtHomePosition()) {
+      this.updateReturnState(enemySettings);
+    } else {
+      this.updateIdleState(enemySettings);
+    }
+
+    this.updateKnockback();
+    this.updateMovementMetrics();
+    this.updateAttackHitbox();
+    this.updateDebugVisuals();
+  }
+
+  refreshPlayerAwareness(player, currentTime) {
+    const inDetectionZone = this.canDetectPlayerInChaseZone(player);
+    const inAttackZone = this.canDetectPlayerInAttackZone(player);
+    const inAttackReach = inAttackZone && this.isPlayerWithinAttackReach(player);
+
+    this.isPlayerDetected = inDetectionZone;
+    this.isPlayerInAttackRange = inAttackReach;
+
+    if (inDetectionZone) {
+      this.lastDetectedPlayerAt = currentTime;
+      this.lastHitLocation = this.getTargetLocation(player) ?? this.lastHitLocation;
+    }
+  }
+
+  updateIdleState(enemySettings) {
+    this.setCurrentState(ENEMY_STATES.IDLE);
+    this.setVelocityX(0);
+    this.startPatrolTween(enemySettings, { mode: 'patrol' });
+  }
+
+  updateChaseState(player, enemySettings) {
+    this.stopPatrolTween();
+    this.setCurrentState(ENEMY_STATES.CHASE);
+    const targetLocation = this.getTargetLocation(player);
+    if (!targetLocation) {
       this.setVelocityX(0);
       return;
     }
 
-    const safePatrolBounds = this.getSafePatrolBounds(enemySettings);
-    const isUnderHitKnockback = this.isHurting || Math.abs(this.knockbackVelocityX) >= this.knockbackFacingThreshold;
-    let desiredVelocityX = this.patrolSpeed * this.patrolDirection;
-
-    if (this.isChasingPlayer) {
-      const chaseTargetLocation = this.getHitChaseTargetLocation();
-      if (chaseTargetLocation) {
-        this.lastHitLocation = chaseTargetLocation;
-        if (Math.abs(chaseTargetLocation.x - this.x) > 4) {
-          this.patrolDirection = chaseTargetLocation.x >= this.x ? 1 : -1;
-        }
-      }
-
-      desiredVelocityX = this.isHurting
-        ? 0
-        : (enemySettings?.chaseSpeed ?? this.patrolSpeed);
-    } else {
-      if (!isUnderHitKnockback && this.x <= safePatrolBounds.min) {
-        this.x = safePatrolBounds.min;
-        this.patrolDirection = 1;
-      } else if (!isUnderHitKnockback && this.x >= safePatrolBounds.max) {
-        this.x = safePatrolBounds.max;
-        this.patrolDirection = -1;
-      }
-
-      desiredVelocityX = this.patrolSpeed;
-    }
-
-    this.setVelocityX((desiredVelocityX * this.patrolDirection) + this.knockbackVelocityX);
-    this.handleObstacleAvoidance(enemySettings, isUnderHitKnockback);
-
-    if (Math.abs(this.knockbackVelocityX) < 6) {
-      this.knockbackVelocityX = 0;
-    } else {
-      this.knockbackVelocityX *= this.knockbackDamping;
+    const currentX = this.body?.center?.x ?? this.x;
+    const deltaX = targetLocation.x - currentX;
+    const direction = Math.abs(deltaX) <= 4 ? 0 : Math.sign(deltaX);
+    if (direction !== 0) {
+      this.patrolDirection = direction;
     }
     this.applyFacing(this.patrolDirection > 0);
+    this.setVelocityX((this.moveSpeed * this.patrolDirection) + this.knockbackVelocityX);
+    this.handleObstacleAvoidance(enemySettings);
   }
 
-  /**
-   * Updates sprite orientation and body offset to match facing direction.
-   */
+  updateChaseSearchState(enemySettings) {
+    this.stopPatrolTween();
+    this.setCurrentState(ENEMY_STATES.CHASE);
+    const targetLocation = this.lastHitLocation;
+    if (!targetLocation || !Number.isFinite(targetLocation.x)) {
+      this.setVelocityX(0);
+      return;
+    }
+
+    const currentX = this.body?.center?.x ?? this.x;
+    const deltaX = targetLocation.x - currentX;
+    if (Math.abs(deltaX) <= 6) {
+      this.setVelocityX(0);
+      return;
+    }
+
+    this.patrolDirection = Math.sign(deltaX);
+    this.applyFacing(this.patrolDirection > 0);
+    this.setVelocityX((this.moveSpeed * this.patrolDirection) + this.knockbackVelocityX);
+    this.handleObstacleAvoidance(enemySettings);
+  }
+
+  updateCooldownState(player) {
+    this.stopPatrolTween();
+    this.setCurrentState(ENEMY_STATES.COOLDOWN);
+    this.setVelocityX(0);
+    const targetLocation = this.getTargetLocation(player);
+    if (targetLocation) {
+      this.patrolDirection = targetLocation.x >= (this.body?.center?.x ?? this.x) ? 1 : -1;
+      this.applyFacing(this.patrolDirection > 0);
+    }
+  }
+
+  updateReturnState(enemySettings) {
+    this.setCurrentState(ENEMY_STATES.RETURN);
+    this.setVelocityX(0);
+    const safePatrolBounds = this.getSafePatrolBounds(enemySettings);
+    const isOutsidePatrolBounds = this.x < safePatrolBounds.min || this.x > safePatrolBounds.max;
+    this.startPatrolTween(enemySettings, { mode: isOutsidePatrolBounds ? 'returnToBounds' : 'patrol' });
+  }
+
+  getTargetLocation(target) {
+    const targetX = target?.body?.center?.x ?? target?.x ?? this.lastHitLocation?.x;
+    const targetY = target?.body?.center?.y ?? target?.y ?? this.lastHitLocation?.y ?? this.y;
+    if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
+      return null;
+    }
+
+    return { x: targetX, y: targetY };
+  }
+
   applyFacing(flipX) {
     this.flipX = flipX;
     this.body.setOffset(flipX ? this.bodyOffsets.right : this.bodyOffsets.left, this.bodyOffsets.y);
   }
 
-  /**
-   * Applies horizontal and optional vertical knockback.
-   */
   applyKnockback(knockbackVelocityX, knockbackVelocityY, knockbackVelocityClampX = 420) {
     const sameDirection = Math.sign(this.knockbackVelocityX) === Math.sign(knockbackVelocityX);
     const nextKnockbackVelocityX = sameDirection
@@ -119,31 +304,23 @@ export default class Enemy extends Character {
       const nextKnockbackVelocityY = Math.min(this.body?.velocity?.y ?? 0, knockbackVelocityY);
       this.setVelocityY(nextKnockbackVelocityY);
     }
-  }
 
-  /**
-   * Marks the enemy as aggroed so it chases the player that attacked it.
-   */
-  provoke(target = null, enemySettings = null) {
-    this.lastProvokedAt = this.scene.time.now;
-    this.lastAttackAt = this.scene.time.now;
-    this.isChasingPlayer = true;
-    this.hitChaseTarget = target;
-    this.hitChaseEndAt = this.scene.time.now + (enemySettings?.hitChaseDurationMs ?? enemySettings?.disengageDelayMs ?? 0);
-    if (this.repositionTween && Number.isFinite(this.tweenTargetX)) {
-      this.discardedTweenTargetX = this.tweenTargetX;
-    }
-    this.stopRepositionTween();
-
-    const chaseTargetLocation = this.getHitChaseTargetLocation();
-    if (chaseTargetLocation) {
-      this.lastHitLocation = chaseTargetLocation;
+    if (this.isAttacking) {
+      this.cancelAttack();
     }
   }
 
-  /**
-   * Stores the player's most recent hit location as the next chase target.
-   */
+  provoke(target = null) {
+    const currentTime = this.scene.time.now;
+    this.lastDetectedPlayerAt = currentTime;
+    this.lastHitLocation = this.getTargetLocation(target) ?? this.lastHitLocation;
+    this.isPlayerDetected = Boolean(target?.active && !target?.isDead);
+  }
+
+  handleChaseZoneOverlap() {}
+
+  handleAttackZoneOverlap() {}
+
   setLastHitLocation(location) {
     if (!location || !Number.isFinite(location.x) || !Number.isFinite(location.y)) {
       return;
@@ -156,15 +333,7 @@ export default class Enemy extends Character {
     const padding = enemySettings?.patrolEdgePadding ?? 0;
     const min = this.patrolMinX + padding;
     const max = this.patrolMaxX - padding;
-
-    if (min >= max) {
-      return {
-        min: this.patrolMinX,
-        max: this.patrolMaxX,
-      };
-    }
-
-    return { min, max };
+    return min >= max ? { min: this.patrolMinX, max: this.patrolMaxX } : { min, max };
   }
 
   reverseDirection(reason, enemySettings) {
@@ -176,257 +345,483 @@ export default class Enemy extends Character {
 
     this.lastObstacleTurnAt = currentTime;
     this.patrolDirection *= -1;
-    this.knockbackVelocityX *= 0.45;
 
     const nudgeDistance = enemySettings?.obstacleNudgeDistance ?? 0;
     if (reason === 'left-wall') {
       this.x += nudgeDistance;
     } else if (reason === 'right-wall') {
       this.x -= nudgeDistance;
-    } else if (reason === 'platform-edge') {
-      this.x += this.patrolDirection > 0 ? nudgeDistance : -nudgeDistance;
     }
 
     const safePatrolBounds = this.getSafePatrolBounds(enemySettings);
     this.x = Phaser.Math.Clamp(this.x, safePatrolBounds.min, safePatrolBounds.max);
     this.applyFacing(this.patrolDirection > 0);
     this.body?.updateFromGameObject();
-    if (this.isRepositioning) {
-      this.repositionTween?.stop();
-    }
     return true;
   }
 
-  stopRepositionTween() {
-    this.isRepositioning = false;
-    this.tweenTargetX = null;
-    if (this.repositionTween) {
-      this.repositionTween.stop();
+  isPlayerWithinAttackReach(player) {
+    if (!player?.body || !this.body) {
+      return false;
+    }
+
+    const horizontalDistance = Math.abs(player.body.center.x - this.body.center.x);
+    const verticalDistance = Math.abs(player.body.center.y - this.body.center.y);
+    return horizontalDistance <= (this.combatProfile.attackRange?.horizontal ?? 0)
+      && verticalDistance <= (this.combatProfile.attackRange?.vertical ?? Infinity);
+  }
+
+  startAttack(player, currentTime = this.scene.time.now) {
+    if (!player?.active || player?.isDead) {
       return;
     }
 
-    this.repositionTween = null;
+    this.stopPatrolTween();
+    this.isAttacking = true;
+    this.attackHasDealtDamage = false;
+    this.activeProjectile = null;
+    this.lastAttackStartedAt = currentTime;
+    this.attackCooldownEndsAt = currentTime + this.attackCooldown;
+    this.setCurrentState(ENEMY_STATES.ATTACK);
+    this.setVelocityX(0);
+    this.activeAttackAnimationKey = this.getNextAttackAnimationKey();
+
+    const targetX = player.body?.center?.x ?? player.x ?? this.x;
+    this.patrolDirection = targetX >= (this.body?.center?.x ?? this.x) ? 1 : -1;
+    this.applyFacing(this.patrolDirection > 0);
+    this.attackHitBox.body.enable = false;
+    this.projectileHitBox.body.enable = false;
+    this.anims.play(this.activeAttackAnimationKey, true);
   }
 
-  getHitChaseTargetLocation() {
-    const targetX = this.hitChaseTarget?.body?.center?.x ?? this.hitChaseTarget?.x ?? this.lastHitLocation?.x;
-    const targetY = this.hitChaseTarget?.body?.center?.y ?? this.hitChaseTarget?.y ?? this.lastHitLocation?.y ?? this.y;
-    if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) {
-      return null;
+  cancelAttack() {
+    this.isAttacking = false;
+    this.attackHasDealtDamage = false;
+    if (!this.activeProjectile) {
+      this.attackHitBox.body.enable = false;
+      this.projectileHitBox.body.enable = false;
+    }
+    this.activeAttackAnimationKey = null;
+  }
+
+  handleAnimationComplete(animation) {
+    if (!this.isAttackAnimationKey(animation?.key)) {
+      return;
     }
 
-    return { x: targetX, y: targetY };
+    this.cancelAttack();
+    this.advanceAttackPattern();
+    if (this.isPlayerDetected && this.isPlayerInAttackRange) {
+      this.setCurrentState(ENEMY_STATES.COOLDOWN);
+      return;
+    }
+
+    if (this.isPlayerDetected) {
+      this.setCurrentState(ENEMY_STATES.CHASE);
+      return;
+    }
+
+    this.setCurrentState(ENEMY_STATES.RETURN);
   }
 
-  finishHitChase(enemySettings) {
-    this.isChasingPlayer = false;
-    this.hitChaseTarget = null;
-    this.hitChaseEndAt = -Infinity;
-    const currentTweenStartX = this.getClampedTweenTargetX(this.x, enemySettings);
-    this.reanchorPatrolBounds(currentTweenStartX, enemySettings);
-    this.savedTweenOriginX = currentTweenStartX;
-    this.tweenTargetX = null;
-    this.lastHitLocation = {
-      x: currentTweenStartX,
-      y: this.y,
+  resumeMovementState() {
+    if (this.isDead || this.isHurting || this.isAttacking) {
+      return;
+    }
+
+    if (this.isPlayerDetected) {
+      this.setCurrentState(this.isPlayerInAttackRange ? ENEMY_STATES.COOLDOWN : ENEMY_STATES.CHASE);
+      return;
+    }
+
+    if (this.isWithinDetectionGrace()) {
+      this.setCurrentState(ENEMY_STATES.CHASE);
+      return;
+    }
+
+    this.setCurrentState(ENEMY_STATES.RETURN);
+  }
+
+  getPreferredAnimationKey() {
+    if (this.isHurting) {
+      return this.animationKeys.hurt;
+    }
+
+    if ((this.currentState === ENEMY_STATES.ATTACK || this.isAttacking) && this.activeAttackAnimationKey) {
+      return this.activeAttackAnimationKey;
+    }
+
+    if ((this.currentState === ENEMY_STATES.IDLE || this.currentState === ENEMY_STATES.COOLDOWN) && !this.isMovingHorizontally) {
+      return this.animationKeys.idle;
+    }
+
+    return this.animationKeys.walk;
+  }
+
+  getCurrentAttackHitboxConfig() {
+    const attackHitboxConfig = this.combatProfile.attackHitbox ?? {};
+    const currentAnimationKey = this.activeProjectile?.animationKey
+      ?? this.activeAttackAnimationKey
+      ?? this.anims.currentAnim?.key
+      ?? null;
+    const animationConfig = currentAnimationKey
+      ? attackHitboxConfig.animationConfigs?.[currentAnimationKey] ?? null
+      : null;
+    const frameIndex = this.anims.currentFrame?.index ?? -1;
+    const resolvedHitboxConfig = {
+      ...attackHitboxConfig,
+      ...(animationConfig ?? {}),
     };
-    this.beginRepositionFromCurrentLocation(enemySettings, currentTweenStartX);
+    const frameConfig = Array.isArray(resolvedHitboxConfig.frameHitboxes)
+      ? resolvedHitboxConfig.frameHitboxes.find(({ start, end }) => frameIndex >= start && frameIndex <= end)
+      : null;
+
+    return {
+      ...resolvedHitboxConfig,
+      ...(frameConfig ?? {}),
+    };
   }
 
-  handleObstacleAvoidance(enemySettings, isUnderHitKnockback = false) {
-    if (!this.body) {
+  isCurrentAttackFrameActive(activeFrames = []) {
+    const frameIndex = this.anims.currentFrame?.index ?? -1;
+    return activeFrames.some(({ start, end }) => frameIndex >= start && frameIndex <= end);
+  }
+
+  updateAttackHitbox() {
+    if (!this.attackHitBox?.body || !this.projectileHitBox?.body) {
       return;
     }
 
-    if (isUnderHitKnockback) {
+    const hitboxConfig = this.getCurrentAttackHitboxConfig();
+    if (hitboxConfig.projectile) {
+      this.attackHitBox.body.enable = false;
+      this.attackHitBox.setVisible(false);
+      this.updateProjectileAttackHitbox(hitboxConfig);
       return;
     }
 
-    const blockedLeft = this.body.blocked.left;
-    const blockedRight = this.body.blocked.right;
-    const isLeavingPlatform = !this.body.blocked.down && this.body.velocity.y >= 0;
+    this.projectileHitBox.body.enable = false;
+    this.projectileHitBox.setVisible(false);
 
-    if (blockedLeft) {
+    const directionalOffsetX = this.getDirectionalAttackOffsetX(hitboxConfig.offsetX ?? 0);
+    this.attackHitBox.follow(
+      this,
+      directionalOffsetX,
+      hitboxConfig.offsetY,
+    );
+
+    if (
+      this.attackHitBox.width !== hitboxConfig.width
+      || this.attackHitBox.height !== hitboxConfig.height
+    ) {
+      this.attackHitBox.width = hitboxConfig.width;
+      this.attackHitBox.height = hitboxConfig.height;
+      this.attackHitBox.body.setSize(hitboxConfig.width, hitboxConfig.height, true);
+    }
+
+    this.attackHitBox.body.enable = this.isAttacking
+      && !this.attackHasDealtDamage
+      && this.isCurrentAttackFrameActive(hitboxConfig.activeFrames ?? []);
+    this.attackHitBox.setVisible(this.debugEnabled && Boolean(this.attackHitBox.body.enable));
+  }
+
+  canDealAttackDamage() {
+    return (this.isAttacking || Boolean(this.activeProjectile))
+      && !this.attackHasDealtDamage
+      && (
+        Boolean(this.attackHitBox?.body?.enable)
+        || Boolean(this.projectileHitBox?.body?.enable)
+      );
+  }
+
+  markAttackDamageDealt() {
+    this.attackHasDealtDamage = true;
+    this.attackHitBox.body.enable = false;
+    this.projectileHitBox.body.enable = false;
+    this.activeProjectile = null;
+  }
+
+  handleObstacleAvoidance(enemySettings) {
+    if (!this.body || this.isAttacking || this.patrolTween) {
+      return;
+    }
+
+    if (this.body.blocked.left) {
       this.reverseDirection('left-wall', enemySettings);
       return;
     }
 
-    if (blockedRight) {
+    if (this.body.blocked.right) {
       this.reverseDirection('right-wall', enemySettings);
       return;
     }
-
-    if (isLeavingPlatform) {
-      this.reverseDirection('platform-edge', enemySettings);
-    }
   }
 
-  /**
-   * Tweens the enemy to a fresh random point in its patrol lane after combat ends.
-   */
-  beginReposition(enemySettings) {
-    this.isChasingPlayer = false;
-    this.hitChaseTarget = null;
-    this.hitChaseEndAt = -Infinity;
-    this.savedTweenOriginX = this.getClampedTweenTargetX(this.x, enemySettings);
-    this.beginRepositionFromCurrentLocation(enemySettings, this.savedTweenOriginX);
-  }
-
-  beginRepositionFromCurrentLocation(enemySettings, startX = this.x) {
-    const safePatrolBounds = this.getSafePatrolBounds(enemySettings);
-    const resolvedStartX = this.getClampedTweenTargetX(startX, enemySettings);
-    this.savedTweenOriginX = resolvedStartX;
-    let targetX = resolvedStartX;
-    let attempts = 0;
-
-    while (
-      attempts < 10
-      && (
-        Math.abs(targetX - resolvedStartX) < 24
-        || (Number.isFinite(this.discardedTweenTargetX) && Math.abs(targetX - this.discardedTweenTargetX) <= 6)
-      )
-    ) {
-      targetX = Phaser.Math.Between(Math.round(safePatrolBounds.min), Math.round(safePatrolBounds.max));
-      attempts += 1;
-    }
-
-    if (Number.isFinite(this.discardedTweenTargetX) && Math.abs(targetX - this.discardedTweenTargetX) <= 6) {
-      targetX = resolvedStartX;
-    }
-
-    this.beginTweenToLocation(targetX, enemySettings, () => {
-      this.savedTweenOriginX = this.getClampedTweenTargetX(this.x, enemySettings);
-      this.discardedTweenTargetX = null;
-      this.patrolDirection = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
-      this.applyFacing(this.patrolDirection > 0);
-    });
-  }
-
-  /**
-   * Starts or retargets the current tween movement using a world X destination.
-   */
-  beginTweenToLocation(targetX, enemySettings, onComplete = null) {
-    const resolvedTargetX = this.getClampedTweenTargetX(targetX, enemySettings);
-    if (!Number.isFinite(resolvedTargetX)) {
-      return;
-    }
-
-    if (this.repositionTween && this.tweenTargetX !== null && Math.abs(this.tweenTargetX - resolvedTargetX) <= 2) {
-      return;
-    }
-
-    this.isRepositioning = true;
-    this.tweenTargetX = resolvedTargetX;
-    this.setVelocity(0, 0);
-    if (Math.abs(resolvedTargetX - this.x) > 1) {
-      this.patrolDirection = resolvedTargetX >= this.x ? 1 : -1;
-      this.applyFacing(this.patrolDirection > 0);
-    }
-    const distance = Math.abs(resolvedTargetX - this.x);
-    const chaseSpeed = enemySettings?.chaseSpeed ?? 1;
-    const tweenDuration = Math.max(
-      180,
-      Math.round((distance / Math.max(chaseSpeed, 1)) * 1000),
-      enemySettings?.repositionDurationMs ?? 0,
-    );
-
-    this.stopRepositionTween();
-    this.repositionTween = this.scene.tweens.add({
-      targets: this,
-      x: resolvedTargetX,
-      duration: tweenDuration,
-      ease: 'Sine.easeInOut',
-      onUpdate: () => {
-        this.body?.updateFromGameObject();
-        this.handleObstacleAvoidance(enemySettings);
-        if (!this.isRepositioning) {
-          this.repositionTween?.stop();
-        }
-      },
-      onComplete: () => {
-        this.repositionTween = null;
-        this.isRepositioning = false;
-        this.tweenTargetX = null;
-        onComplete?.();
-      },
-      onStop: () => {
-        this.repositionTween = null;
-        this.isRepositioning = false;
-        this.tweenTargetX = null;
-      },
-    });
-  }
-
-  /**
-   * Returns the safe X destination used by tween-based enemy movement.
-   */
-  getClampedTweenTargetX(targetX, enemySettings) {
-    const safePatrolBounds = this.getSafePatrolBounds(enemySettings);
-    return Phaser.Math.Clamp(targetX, safePatrolBounds.min, safePatrolBounds.max);
-  }
-
-  /**
-   * Sets the movement lane for an enemy so it stays on its assigned platform.
-   */
   setPatrolBounds(minX, maxX) {
     this.patrolMinX = Math.min(minX, maxX);
     this.patrolMaxX = Math.max(minX, maxX);
-    this.patrolRangeWidth = Math.max(0, this.patrolMaxX - this.patrolMinX);
-    this.patrolStartX = this.patrolMinX;
-    this.patrolEndX = this.patrolMaxX;
-    const safePatrolBounds = this.getSafePatrolBounds();
-    this.x = Phaser.Math.Clamp(this.x, safePatrolBounds.min, safePatrolBounds.max);
-    this.patrolDirection = this.x >= safePatrolBounds.max ? -1 : 1;
+    this.homeX = Phaser.Math.Clamp(this.homeX, this.patrolMinX, this.patrolMaxX);
+    this.x = Phaser.Math.Clamp(this.x, this.patrolMinX, this.patrolMaxX);
+    this.patrolDirection = this.x >= this.patrolMaxX ? -1 : 1;
+    this.lastPatrolTweenX = this.x;
   }
 
-  reanchorPatrolBounds(centerX, enemySettings) {
-    const rangeWidth = Math.max(48, this.patrolRangeWidth || (this.patrolMaxX - this.patrolMinX) || 240);
-    const halfRange = rangeWidth / 2;
-    const worldBounds = this.scene.physics?.world?.bounds;
-    const padding = enemySettings?.patrolEdgePadding ?? 0;
-    const minWorldX = Number.isFinite(worldBounds?.x) ? worldBounds.x + padding : -Infinity;
-    const maxWorldX = Number.isFinite(worldBounds?.right) ? worldBounds.right - padding : Infinity;
-
-    let nextMinX = centerX - halfRange;
-    let nextMaxX = centerX + halfRange;
-
-    if (nextMinX < minWorldX) {
-      nextMaxX += minWorldX - nextMinX;
-      nextMinX = minWorldX;
-    }
-
-    if (nextMaxX > maxWorldX) {
-      nextMinX -= nextMaxX - maxWorldX;
-      nextMaxX = maxWorldX;
-    }
-
-    this.patrolMinX = Math.min(nextMinX, nextMaxX);
-    this.patrolMaxX = Math.max(nextMinX, nextMaxX);
-    this.patrolStartX = this.patrolMinX;
-    this.patrolEndX = this.patrolMaxX;
-  }
-
-  /**
-   * Keeps detection and attack hitboxes aligned to the enemy.
-   */
   updateDetectionZones() {
-    if (this.flipX) {
-      this.detectionZone.follow(this, 60, 50);
-      this.enemyHitBox.follow(this, 90, 90);
-    } else {
-      this.detectionZone.follow(this, 50, 50);
-      this.enemyHitBox.follow(this, 20, 90);
-    }
-
-    this.enemyHitBox.setDepth(10);
-    this.detectionZone.setDepth(10);
+    const centerX = this.body?.center?.x ?? (this.x + (this.width / 2));
+    const centerY = this.body?.center?.y ?? (this.y + (this.height / 2));
+    this.detectionZone.setPosition(centerX, centerY);
+    this.detectionZone.body?.updateFromGameObject();
+    this.attackDetectionZone.setPosition(centerX, centerY);
+    this.attackDetectionZone.body?.updateFromGameObject();
+    this.attackHitBox.body?.updateFromGameObject();
+    this.projectileHitBox.body?.updateFromGameObject();
   }
 
-  /**
-   * Returns true when the player is inside the detection zone.
-   * The manager calls this during its per-frame update loop.
-   */
-  canDetectPlayer(player) {
-    return this.detectionZone.getBounds().contains(player.x, player.y);
+  updateProjectileAttackHitbox(hitboxConfig) {
+    const frameIsActive = this.isCurrentAttackFrameActive(hitboxConfig.activeFrames ?? []);
+    const launchOffsetX = this.getDirectionalAttackOffsetX(hitboxConfig.offsetX ?? 0);
+    const launchX = (this.x ?? 0) + launchOffsetX;
+    const launchY = (this.y ?? 0) + hitboxConfig.offsetY;
+
+    if (!this.activeProjectile && this.isAttacking && frameIsActive && !this.attackHasDealtDamage) {
+      const targetLocation = this.lastHitLocation ?? { x: launchX, y: launchY };
+      const deltaX = targetLocation.x - launchX;
+      const deltaY = targetLocation.y - launchY;
+      const distance = Math.max(1, Math.hypot(deltaX, deltaY));
+      const projectileSpeed = hitboxConfig.projectileSpeed ?? 240;
+      this.activeProjectile = {
+        animationKey: this.activeAttackAnimationKey,
+        x: launchX,
+        y: launchY,
+        velocityX: (deltaX / distance) * projectileSpeed,
+        velocityY: (deltaY / distance) * projectileSpeed,
+        maxDistance: hitboxConfig.projectileMaxDistance ?? 220,
+        traveledDistance: 0,
+      };
+    }
+
+    if (!this.activeProjectile) {
+      this.projectileHitBox.body.enable = false;
+      this.projectileHitBox.setVisible(false);
+      return;
+    }
+
+    const deltaSeconds = Math.max(0.001, (this.scene.game.loop.delta ?? 16.67) / 1000);
+    this.activeProjectile.x += this.activeProjectile.velocityX * deltaSeconds;
+    this.activeProjectile.y += this.activeProjectile.velocityY * deltaSeconds;
+    this.activeProjectile.traveledDistance += Math.hypot(
+      this.activeProjectile.velocityX * deltaSeconds,
+      this.activeProjectile.velocityY * deltaSeconds,
+    );
+
+    if (this.activeProjectile.traveledDistance >= this.activeProjectile.maxDistance) {
+      this.activeProjectile = null;
+      this.projectileHitBox.body.enable = false;
+      this.projectileHitBox.setVisible(false);
+      return;
+    }
+
+    if (
+      this.projectileHitBox.width !== hitboxConfig.width
+      || this.projectileHitBox.height !== hitboxConfig.height
+    ) {
+      this.projectileHitBox.width = hitboxConfig.width;
+      this.projectileHitBox.height = hitboxConfig.height;
+      this.projectileHitBox.body.setSize(hitboxConfig.width, hitboxConfig.height, true);
+    }
+
+    this.projectileHitBox.setPosition(this.activeProjectile.x, this.activeProjectile.y);
+    this.projectileHitBox.body.updateFromGameObject();
+    this.projectileHitBox.body.enable = !this.attackHasDealtDamage;
+    this.projectileHitBox.setVisible(this.debugEnabled && Boolean(this.projectileHitBox.body.enable));
+  }
+
+  canDetectPlayerInChaseZone(player) {
+    if (!player?.playerHurtBox || !this.detectionZone) {
+      return false;
+    }
+
+    return Phaser.Geom.Intersects.RectangleToRectangle(this.detectionZone.getBounds(), player.playerHurtBox.getBounds());
+  }
+
+  canDetectPlayerInAttackZone(player) {
+    if (!player?.playerHurtBox || !this.attackDetectionZone) {
+      return false;
+    }
+
+    return Phaser.Geom.Intersects.RectangleToRectangle(this.attackDetectionZone.getBounds(), player.playerHurtBox.getBounds());
+  }
+
+  isWithinDetectionGrace(currentTime = this.scene.time.now) {
+    return (currentTime - this.lastDetectedPlayerAt) <= this.detectionLoseSightGraceMs;
+  }
+
+  isAtHomePosition() {
+    return Math.abs((this.body?.center?.x ?? this.x) - this.homeX) <= 6;
+  }
+
+  setCurrentState(nextState) {
+    this.currentState = nextState;
+  }
+
+  getDirectionalAttackOffsetX(offsetX = 0) {
+    if (!this.flipX) {
+      return offsetX;
+    }
+
+    const spriteWidth = this.displayWidth || this.width || 0;
+    return spriteWidth - offsetX;
+  }
+
+  getNextAttackAnimationKey() {
+    const attackSlot = this.attackPattern[this.attackPatternIndex] ?? 'attack';
+    return this.animationKeys[attackSlot] ?? this.animationKeys.attack;
+  }
+
+  advanceAttackPattern() {
+    this.attackPatternIndex = (this.attackPatternIndex + 1) % this.attackPattern.length;
+  }
+
+  isAttackAnimationKey(animationKey) {
+    return animationKey === this.animationKeys.attack
+      || animationKey === this.animationKeys.attack2
+      || animationKey === this.animationKeys.attack3;
+  }
+
+  startPatrolTween(enemySettings, options = {}) {
+    if (this.isPlayerDetected || this.isAttacking || this.isHurting) {
+      return;
+    }
+
+    const tweenMode = options.mode ?? 'patrol';
+    const safePatrolBounds = this.getSafePatrolBounds(enemySettings);
+    let targetX;
+    if (tweenMode === 'returnToBounds' && this.x < safePatrolBounds.min) {
+      this.patrolDirection = 1;
+      targetX = safePatrolBounds.min;
+    } else if (tweenMode === 'returnToBounds' && this.x > safePatrolBounds.max) {
+      this.patrolDirection = -1;
+      targetX = safePatrolBounds.max;
+    } else {
+      targetX = this.patrolDirection > 0 ? safePatrolBounds.max : safePatrolBounds.min;
+    }
+
+    if (Math.abs(targetX - this.x) <= 2) {
+      this.patrolDirection *= -1;
+      targetX = this.patrolDirection > 0 ? safePatrolBounds.max : safePatrolBounds.min;
+    }
+
+    if (
+      this.patrolTween
+      && this.patrolTweenMode === tweenMode
+      && this.patrolTweenTargetX !== null
+      && Math.abs(this.patrolTweenTargetX - targetX) <= 2
+    ) {
+      return;
+    }
+
+    this.stopPatrolTween();
+    this.patrolTweenMode = tweenMode;
+    this.patrolTweenTargetX = targetX;
+    this.lastPatrolTweenX = this.x;
+    this.applyFacing(this.patrolDirection > 0);
+
+    const distance = Math.abs(targetX - this.x);
+    const tweenSpeed = tweenMode === 'returnToBounds'
+      ? Math.max(this.returnSpeed, 1)
+      : Math.max(this.patrolSpeed, 1);
+    const tweenDuration = Math.max(
+      200,
+      Math.round((distance / tweenSpeed) * 1000),
+      enemySettings?.repositionDurationMs ?? 0,
+    );
+
+    this.patrolTween = this.scene.tweens.add({
+      targets: this,
+      x: targetX,
+      duration: tweenDuration,
+      ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        const deltaX = this.x - this.lastPatrolTweenX;
+        if (Math.abs(deltaX) > 0.05) {
+          this.patrolDirection = deltaX > 0 ? 1 : -1;
+          this.applyFacing(this.patrolDirection > 0);
+        }
+        this.lastPatrolTweenX = this.x;
+        this.body?.updateFromGameObject();
+
+        if (this.isPlayerDetected || this.isAttacking || this.isHurting) {
+          this.stopPatrolTween();
+        }
+      },
+      onComplete: () => {
+        const completedMode = this.patrolTweenMode;
+        this.patrolTween = null;
+        this.patrolTweenTargetX = null;
+        this.patrolTweenMode = null;
+        if (completedMode === 'returnToBounds') {
+          if (!this.isPlayerDetected && !this.isAttacking && !this.isHurting) {
+            this.setCurrentState(ENEMY_STATES.IDLE);
+            this.startPatrolTween(enemySettings, { mode: 'patrol' });
+          }
+          return;
+        }
+
+        this.patrolDirection *= -1;
+        if (!this.isPlayerDetected && !this.isAttacking && !this.isHurting) {
+          this.startPatrolTween(enemySettings, { mode: 'patrol' });
+        }
+      },
+      onStop: () => {
+        this.patrolTween = null;
+        this.patrolTweenTargetX = null;
+        this.patrolTweenMode = null;
+      },
+    });
+  }
+
+  stopPatrolTween() {
+    if (!this.patrolTween) {
+      return;
+    }
+
+    this.patrolTween.stop();
+    this.patrolTween = null;
+    this.patrolTweenTargetX = null;
+    this.patrolTweenMode = null;
+    this.body?.updateFromGameObject();
+  }
+
+  updateKnockback() {
+    if (Math.abs(this.knockbackVelocityX) < 6) {
+      this.knockbackVelocityX = 0;
+      return;
+    }
+
+    this.knockbackVelocityX *= this.knockbackDamping;
+  }
+
+  updateMovementMetrics() {
+    const velocityX = Math.abs(this.body?.velocity?.x ?? 0);
+    const deltaX = Math.abs(this.x - this.lastFrameX);
+    this.isMovingHorizontally = velocityX > 8 || deltaX > 0.35;
+    this.lastFrameX = this.x;
+  }
+
+  updateDebugVisuals() {
+    this.detectionZone.setVisible(this.debugEnabled);
+    this.attackDetectionZone.setVisible(this.debugEnabled);
+    this.attackHitBox.setVisible(this.debugEnabled && Boolean(this.attackHitBox.body?.enable));
+    this.projectileHitBox.setVisible(this.debugEnabled && Boolean(this.projectileHitBox.body?.enable));
+
+    if (!this.stateLabel) {
+      return;
+    }
+
+    const centerX = this.body?.center?.x ?? this.x;
+    const topY = this.body?.top ?? this.y;
+    this.stateLabel.setPosition(centerX, topY - 12);
+    this.stateLabel.setText(this.currentState.toUpperCase());
+    this.stateLabel.setVisible(this.debugEnabled);
   }
 }

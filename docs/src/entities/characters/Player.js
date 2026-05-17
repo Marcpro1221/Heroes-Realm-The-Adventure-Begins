@@ -85,6 +85,8 @@ export default class Player extends Character {
     this.lastLeftTapAt = -Infinity;
     this.lastRightTapAt = -Infinity;
     this.isUntouchable = false;
+    this.enemyDamageInvincibleUntil = -Infinity;
+    this.enemyKnockbackTween = null;
     this.isSmokeHidden = false;
     this.smokeQueuedAttackAction = null;
     this.smokeHideAnimationPending = false;
@@ -115,6 +117,7 @@ export default class Player extends Character {
     this.swordHitBox = new Hitbox(scene, this.x, this.y, 65, 40);
     this.spinHitBox = new Hitbox(scene, this.x, this.y, 145, 40);
     this.thrustAttackHitBox = new Hitbox(scene, this.x, this.y, 95, 25);
+    this.playerHurtBox = new Hitbox(scene, this.x, this.y, bodyBounds.width + 10, bodyBounds.height + 10);
     this.specialAttackHitBox = new Hitbox(
       scene,
       this.x,
@@ -133,6 +136,7 @@ export default class Player extends Character {
     this.spaceSpikeEffects = this.createSpaceSpikeEffects();
     this.bindAttackAnimationHandlers();
     this.updateNameLabelPosition();
+    this.updatePlayerHurtBox();
   }
 
   /**
@@ -527,13 +531,13 @@ export default class Player extends Character {
    */
   getAttackHitEffectContext(action) {
     const effectConfig = this.characterConfig?.effects;
-    if (!effectConfig?.hitEffectAttacks?.includes(action)) {
+    const defaultHitbox = this.getDefaultAttackEffectHitbox(action);
+    if (!effectConfig || !defaultHitbox) {
       return null;
     }
 
     const frameIndex = this.anims.currentFrame?.index ?? null;
     const attackProfile = this.getCombatProfile(action);
-    const defaultHitbox = this.getDefaultAttackEffectHitbox(action);
     const frameHitboxConfig = this.getFrameHitboxConfig(frameIndex ?? -1, attackProfile?.hitboxFrames ?? []);
     const resolvedHitboxConfig = {
       ...(defaultHitbox ?? {}),
@@ -547,10 +551,10 @@ export default class Player extends Character {
 
     return {
       angle: frameEffectConfig?.slashAngle ?? effectConfig.slashAngle ?? 0,
-      alpha: frameEffectConfig?.slashAlpha ?? effectConfig.slashAlpha ?? 0.98,
-      scale: frameEffectConfig?.slashScale ?? effectConfig.slashScale ?? 1,
-      radius: frameEffectConfig?.slashRadius ?? effectConfig.slashRadius ?? 42,
-      thickness: Math.max(10, frameEffectConfig?.slashThickness ?? effectConfig.slashThickness ?? 10),
+      alpha: Math.max(0.98, frameEffectConfig?.slashAlpha ?? effectConfig.slashAlpha ?? 0.98),
+      scale: (frameEffectConfig?.slashScale ?? effectConfig.slashScale ?? 1) * 1.08,
+      radius: (frameEffectConfig?.slashRadius ?? effectConfig.slashRadius ?? 42) + 4,
+      thickness: Math.max(14, (frameEffectConfig?.slashThickness ?? effectConfig.slashThickness ?? 10) * 1.28),
       flatten: frameEffectConfig?.slashFlatten ?? effectConfig.slashFlatten ?? 0.72,
       impactOffsetX: Phaser.Math.Clamp(resolvedOffsetX * 0.18, -18, 18),
       impactOffsetY: Phaser.Math.Clamp(resolvedOffsetY * 0.28, -14, 14),
@@ -592,8 +596,9 @@ export default class Player extends Character {
       slashEffect.strokePath();
     };
 
-    drawArc(effectContext.radius + 4, outerColor, outerWidth, 0.62);
-    drawArc(effectContext.radius, midColor ?? outerColor, midWidth, 0.9);
+    drawArc(effectContext.radius + 9, outerColor, outerWidth * 1.2, 0.28);
+    drawArc(effectContext.radius + 4, outerColor, outerWidth, 0.76);
+    drawArc(effectContext.radius, midColor ?? outerColor, midWidth, 1);
     drawArc(Math.max(10, effectContext.radius - 5), coreColor ?? midColor ?? outerColor, coreWidth, 1);
 
     const facingRotation = this.flipX ? 180 : 0;
@@ -601,14 +606,119 @@ export default class Player extends Character {
     slashEffect.setScale(signedScaleX, effectContext.scale * effectContext.flatten);
     slashEffect.setRotation(Phaser.Math.DegToRad(facingRotation + effectContext.angle));
 
+    const effectDepth = (enemy.depth ?? this.depth ?? 10) + 6;
+    const dashDirection = this.flipX ? -1 : 1;
+    const accentColor = coreColor ?? midColor ?? outerColor;
+    const glow = this.scene.add.ellipse(effectX, effectY, effectContext.radius * 1.25, effectContext.radius * 0.5, accentColor, 0.22)
+      .setDepth(effectDepth)
+      .setRotation(Phaser.Math.DegToRad(effectContext.angle))
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    this.scene.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scaleX: 1.65,
+      scaleY: 1.35,
+      duration: 420,
+      ease: 'Sine.easeOut',
+      onComplete: () => glow.destroy(),
+    });
+
+    [0, 1, 2].forEach((index) => {
+      const streak = this.scene.add.rectangle(
+        effectX - (dashDirection * (32 + (index * 8))),
+        effectY + ((index - 1) * 7),
+        effectContext.radius * (0.95 - (index * 0.12)),
+        Math.max(3, effectContext.thickness * (0.24 - (index * 0.035))),
+        index === 1 ? accentColor : (midColor ?? outerColor),
+        0.82 - (index * 0.14),
+      )
+        .setDepth(effectDepth + 1)
+        .setRotation(Phaser.Math.DegToRad(effectContext.angle + (dashDirection * (index - 1) * 5)))
+        .setBlendMode(Phaser.BlendModes.ADD);
+
+      this.scene.tweens.add({
+        targets: streak,
+        x: streak.x + (dashDirection * (58 + (index * 12))),
+        alpha: 0,
+        scaleX: 1.9,
+        scaleY: 0.6,
+        duration: 240 + (index * 45),
+        delay: index * 30,
+        ease: 'Cubic.easeOut',
+        onComplete: () => streak.destroy(),
+      });
+    });
+
+    [0, 1].forEach((waveIndex) => {
+      const wave = this.scene.add.graphics()
+        .setDepth(effectDepth)
+        .setPosition(effectX - (dashDirection * (waveIndex * 8)), effectY)
+        .setAlpha(0.58 - (waveIndex * 0.14))
+        .setBlendMode(Phaser.BlendModes.ADD);
+      wave.lineStyle(Math.max(2, effectContext.thickness * 0.22), waveIndex === 0 ? accentColor : (midColor ?? outerColor), 0.9);
+      wave.strokeEllipseShape(new Phaser.Geom.Ellipse(0, 0, effectContext.radius * 0.78, effectContext.radius * 0.34), 48);
+      wave.setRotation(Phaser.Math.DegToRad(effectContext.angle));
+
+      this.scene.tweens.add({
+        targets: wave,
+        x: wave.x - (dashDirection * (14 + (waveIndex * 6))),
+        alpha: 0,
+        scaleX: 1.8 + (waveIndex * 0.25),
+        scaleY: 1.35 + (waveIndex * 0.18),
+        duration: 330 + (waveIndex * 90),
+        delay: 70 + (waveIndex * 65),
+        ease: 'Sine.easeOut',
+        onComplete: () => wave.destroy(),
+      });
+    });
+
+    const lightning = this.scene.add.graphics()
+      .setDepth(effectDepth + 2)
+      .setPosition(effectX, effectY)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const lightningLength = Math.max(70, effectContext.radius * 1.55);
+    const lightningStartX = -dashDirection * (lightningLength * 0.48);
+    const lightningStep = (lightningLength / 5) * dashDirection;
+    const lightningPoints = [
+      { x: lightningStartX, y: -6 },
+      { x: lightningStartX + lightningStep, y: 5 },
+      { x: lightningStartX + (lightningStep * 2), y: -3 },
+      { x: lightningStartX + (lightningStep * 3), y: 7 },
+      { x: lightningStartX + (lightningStep * 4), y: -5 },
+      { x: lightningStartX + (lightningStep * 5), y: 2 },
+    ];
+    lightning.lineStyle(6, outerColor, 0.34);
+    lightning.beginPath();
+    lightning.moveTo(lightningPoints[0].x, lightningPoints[0].y);
+    lightningPoints.slice(1).forEach((point) => lightning.lineTo(point.x, point.y));
+    lightning.strokePath();
+    lightning.lineStyle(2, accentColor, 0.96);
+    lightning.beginPath();
+    lightning.moveTo(lightningPoints[0].x, lightningPoints[0].y);
+    lightningPoints.slice(1).forEach((point) => lightning.lineTo(point.x, point.y));
+    lightning.strokePath();
+    lightning.setRotation(Phaser.Math.DegToRad(effectContext.angle));
+
+    this.scene.tweens.add({
+      targets: lightning,
+      x: lightning.x + (dashDirection * 18),
+      alpha: 0,
+      duration: 190,
+      delay: 35,
+      ease: 'Quad.easeOut',
+      onComplete: () => lightning.destroy(),
+    });
+
     this.scene.tweens.add({
       targets: slashEffect,
       alpha: 0,
-      scaleX: signedScaleX * 1.22,
-      scaleY: effectContext.scale * effectContext.flatten * 1.08,
-      y: effectY - 6,
-      duration: 320,
-      ease: 'Quad.easeOut',
+      scaleX: signedScaleX * 1.28,
+      scaleY: effectContext.scale * effectContext.flatten * 1.14,
+      y: effectY - 8,
+      duration: 460,
+      delay: 90,
+      ease: 'Sine.easeOut',
       onComplete: () => slashEffect.destroy(),
     });
   }
@@ -657,6 +767,43 @@ export default class Player extends Character {
 
     const frameIndex = this.anims.currentFrame?.index ?? 'impact';
     this.playAttackCameraShake(specialAttackProfile.cameraShake, `specialAttackImpact-${frameIndex}`);
+  }
+
+  /**
+   * Returns true when one enemy is valid for the active special attack.
+   * Bladed Staff uses cast-origin range gating so jump hitboxes cannot damage
+   * enemies outside the original cast radius.
+   */
+  canSpecialAttackHitEnemy(enemy) {
+    if (!enemy?.body) {
+      return false;
+    }
+
+    const specialAttackProfile = this.getCombatProfile('specialAttack');
+    if (!specialAttackProfile) {
+      return true;
+    }
+
+    if (specialAttackProfile.mode !== 'melee' || !specialAttackProfile.jumpToNearestEnemy) {
+      return true;
+    }
+
+    const castOrigin = this.specialAttackCastOrigin;
+    if (!castOrigin) {
+      return true;
+    }
+
+    const castRange = specialAttackProfile.searchRange ?? 700;
+    const enemyCenterX = enemy.body.center.x;
+    const enemyCenterY = enemy.body.center.y;
+    const distanceFromCastOrigin = Phaser.Math.Distance.Between(
+      castOrigin.x,
+      castOrigin.y,
+      enemyCenterX,
+      enemyCenterY,
+    );
+
+    return distanceFromCastOrigin <= castRange;
   }
 
   /**
@@ -1859,6 +2006,7 @@ export default class Player extends Character {
   update() {
     if (this.isDead) {
       this.setVelocityX(0);
+      this.updatePlayerHurtBox();
       this.updateNameLabelPosition();
       this.updateDeathAudio();
       return;
@@ -1976,6 +2124,7 @@ export default class Player extends Character {
 
     this.updateSmokeAmbushTracking();
     this.updateHitboxes();
+    this.updatePlayerHurtBox();
     this.updateHeal();
     this.updateIdleBreakState(isPerformingAction, movingX);
     this.updateManaRegeneration();
@@ -2259,6 +2408,27 @@ export default class Player extends Character {
     this.updateSpinHitbox();
     this.updateThrustHitbox();
     this.updateSpecialAttackEffect();
+  }
+
+  updatePlayerHurtBox() {
+    if (!this.playerHurtBox?.body) {
+      return;
+    }
+
+    const centerX = this.body?.center?.x ?? this.x;
+    const centerY = this.body?.center?.y ?? this.y;
+    this.playerHurtBox.setPosition(centerX, centerY);
+    this.playerHurtBox.body.updateFromGameObject();
+    this.playerHurtBox.body.enable = this.active && !this.isDead;
+    this.playerHurtBox.setVisible(false);
+  }
+
+  grantEnemyDamageInvincibility(durationMs = 500) {
+    this.enemyDamageInvincibleUntil = this.scene.time.now + durationMs;
+  }
+
+  isEnemyDamageInvincible(currentTime = this.scene.time.now) {
+    return currentTime < (this.enemyDamageInvincibleUntil ?? -Infinity);
   }
 
   /**
@@ -2601,6 +2771,9 @@ export default class Player extends Character {
     this.movementDashDirection = 0;
     this.movementDashEndsAt = 0;
     this.isUntouchable = false;
+    this.enemyDamageInvincibleUntil = -Infinity;
+    this.enemyKnockbackTween?.stop();
+    this.enemyKnockbackTween = null;
     this.isSmokeHidden = false;
     this.smokeQueuedAttackAction = null;
     this.smokeHideAnimationPending = false;
@@ -2615,6 +2788,7 @@ export default class Player extends Character {
     this.swordHitBox.body.enable = false;
     this.spinHitBox.body.enable = false;
     this.thrustAttackHitBox.body.enable = false;
+    this.playerHurtBox.body.enable = true;
     this.specialAttackHitBox.body.enable = false;
     this.stopSpaceSpikeEffects();
   }
