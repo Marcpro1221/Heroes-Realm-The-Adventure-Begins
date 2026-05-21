@@ -141,6 +141,9 @@ export const CHARACTER_SPRITESHEETS = Object.freeze({
   'axion.idle': { path: buildAssetPath('Sprite_Sheet_Axion', 'Idle.png'), frameWidth: 144, frameHeight: 144 },
   'axion.jump': { path: buildAssetPath('Sprite_Sheet_Axion', 'Jump.png'), frameWidth: 144, frameHeight: 144 },
   'axion.run': { path: buildAssetPath('Sprite_Sheet_Axion', 'Run.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.thirdSkill': { path: buildAssetPath('Sprite_Sheet_Axion', 'Third Skill.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.specialAttack': { path: buildAssetPath('Sprite_Sheet_Axion', 'Special Skill.png'), frameWidth: 144, frameHeight: 144 },
+  'axion.powerCharge': { path: buildAssetPath('Sprite_Sheet_Axion', 'Power Charge.png'), frameWidth: 144, frameHeight: 144 },
 });
 
 /**

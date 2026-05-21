@@ -138,6 +138,21 @@ export const registerPlayerAnimations = (scene, characterConfig) => {
     });
   }
 
+  if (resolvedConfig.effects?.powerChargeTextureKey && scene.textures.exists(resolvedConfig.effects.powerChargeTextureKey)) {
+    animationKeys.powerCharge = ensureAnimation(scene, {
+      key: resolvedConfig.effects.powerChargeAnimation.key,
+      frames: scene.anims.generateFrameNumbers(
+        resolvedConfig.effects.powerChargeTextureKey,
+        {
+          start: resolvedConfig.effects.powerChargeAnimation.start,
+          end: resolvedConfig.effects.powerChargeAnimation.end,
+        },
+      ),
+      frameRate: resolvedConfig.effects.powerChargeAnimation.frameRate,
+      repeat: -1,
+    });
+  }
+
   return animationKeys;
 };
 

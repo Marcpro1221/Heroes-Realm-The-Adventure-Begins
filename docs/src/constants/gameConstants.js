@@ -26,7 +26,7 @@ export const PHYSICS_CONFIG = Object.freeze({
   default: 'arcade',
   arcade: {
     gravity: { y: 800 },
-    debug: true,
+    debug: false,
   },
 });
 

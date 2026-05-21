@@ -70,6 +70,21 @@ export default class Player extends Character {
     this.trackedSurpriseEnemy = null;
     this.trackedSpecialEnemy = null;
     this.lastSpecialStrikeFrame = null;
+    this.specialAttackStrikeCount = 0;
+    this.lastSpecialAttackCountedFrame = null;
+    this.specialBuffStacks = 0;
+    this.specialBuffMaxStacks = 0;
+    this.specialBuffAura = null;
+    this.specialBuffStackBar = null;
+    this.specialBuffCurrentAttackKey = null;
+    this.specialBuffShockwaveApplied = false;
+    this.specialBuffShockwaveActive = false;
+    this.specialBuffFlameTimer = null;
+    this.specialBuffLightningTimer = null;
+    this.specialBuffGroundDisc = null;
+    this.specialBuffBodyGlow = null;
+    this.specialBuffInnerCore = null;
+    this.specialBuffHpRegenLastAt = null;
     this.specialAttackAnchorY = null;
     this.specialAttackCastOrigin = null;
     this.specialAttackReturnPosition = null;
@@ -656,7 +671,7 @@ export default class Player extends Character {
         .setPosition(effectX - (dashDirection * (waveIndex * 8)), effectY)
         .setAlpha(0.58 - (waveIndex * 0.14))
         .setBlendMode(Phaser.BlendModes.ADD);
-      wave.lineStyle(Math.max(2, effectContext.thickness * 0.22), waveIndex === 0 ? accentColor : (midColor ?? outerColor), 0.9);
+      wave.lineStyle(Math.max(1.5, effectContext.thickness * 0.12), waveIndex === 0 ? accentColor : (midColor ?? outerColor), 0.9);
       wave.strokeEllipseShape(new Phaser.Geom.Ellipse(0, 0, effectContext.radius * 0.78, effectContext.radius * 0.34), 48);
       wave.setRotation(Phaser.Math.DegToRad(effectContext.angle));
 
@@ -666,8 +681,8 @@ export default class Player extends Character {
         alpha: 0,
         scaleX: 1.8 + (waveIndex * 0.25),
         scaleY: 1.35 + (waveIndex * 0.18),
-        duration: 330 + (waveIndex * 90),
-        delay: 70 + (waveIndex * 65),
+        duration: 600 + (waveIndex * 150),
+        delay: 80 + (waveIndex * 80),
         ease: 'Sine.easeOut',
         onComplete: () => wave.destroy(),
       });
@@ -716,7 +731,7 @@ export default class Player extends Character {
       scaleX: signedScaleX * 1.28,
       scaleY: effectContext.scale * effectContext.flatten * 1.14,
       y: effectY - 8,
-      duration: 460,
+      duration: 580,
       delay: 90,
       ease: 'Sine.easeOut',
       onComplete: () => slashEffect.destroy(),
@@ -1103,13 +1118,1344 @@ export default class Player extends Character {
   }
 
   /**
+   * Counts one melee special strike window even when the hitbox does not touch
+   * an enemy, so limited multi-hit specials restore after their full combo.
+   */
+  canUseSpecialAttackStrike(frameIndex, specialAttackProfile = null) {
+    const maxStrikeCount = specialAttackProfile?.maxStrikeCount;
+    if (!Number.isFinite(maxStrikeCount) || maxStrikeCount <= 0) {
+      return true;
+    }
+
+    if (this.lastSpecialAttackCountedFrame !== frameIndex) {
+      this.lastSpecialAttackCountedFrame = frameIndex;
+      this.specialAttackStrikeCount += 1;
+    }
+
+    return this.specialAttackStrikeCount <= maxStrikeCount;
+  }
+
+  getSpecialBuffProfile() {
+    const specialAttackProfile = this.getCombatProfile('specialAttack');
+    return specialAttackProfile?.mode === 'buff' ? specialAttackProfile : null;
+  }
+
+  isSpecialBuffActive() {
+    return this.specialBuffStacks > 0 && Boolean(this.getSpecialBuffProfile());
+  }
+
+  activateSpecialBuff(specialAttackProfile = this.getSpecialBuffProfile()) {
+    if (!specialAttackProfile) {
+      return false;
+    }
+
+    this.isSpecialAttackCasting = false;
+    this.swordSwing = false;
+    this.specialAttackTriggered = false;
+    this.specialBuffMaxStacks = Math.max(1, specialAttackProfile.stackCount ?? 5);
+    this.specialBuffStacks = this.specialBuffMaxStacks;
+    this.specialBuffCurrentAttackKey = null;
+    this.specialBuffShockwaveApplied = false;
+    this.specialBuffShockwaveActive = false;
+    this.specialAttackHitBox.body.enable = false;
+    this.playAttackSound(specialAttackProfile.sound, 'heavySmash');
+    this.playPowerChargeCastPresentation();
+    this.scene?.cameras?.main?.shake(220, 0.012, false);
+    this.ensureSpecialBuffVisuals();
+    this.updateSpecialBuffVisuals();
+    return true;
+  }
+
+  /**
+   * Super-Saiyan-style charge burst using the character's color palette.
+   * Rising energy columns, ring waves, wisps, and screen tint are all derived
+   * from `effects.slashPalette` so each character keeps its own color identity.
+   */
+  playPowerChargeCastPresentation() {
+    if (!this.scene) {
+      return;
+    }
+
+    const palette = this.characterConfig?.effects?.slashPalette ?? [0xe8ffff, 0x62f5ff, 0x9bffea];
+    const [outerColor, midColor, coreColor] = palette;
+    const centerX = this.body?.center?.x ?? this.x;
+    const centerY = (this.body?.center?.y ?? this.y) - 8;
+    const playerTopY = this.body?.top ?? (this.y - 44);
+    const depth = this.depth + 3;
+    const camera = this.scene.cameras.main;
+    const midColorHex = `#${midColor.toString(16).padStart(6, '0')}`;
+
+    // Bright core flash
+    const flash = this.scene.add.ellipse(centerX, centerY, 80, 60, coreColor, 0.72)
+      .setDepth(depth + 5)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: flash,
+      scaleX: 3.6,
+      scaleY: 3.2,
+      alpha: 0,
+      duration: 380,
+      ease: 'Cubic.easeOut',
+      onComplete: () => flash.destroy(),
+    });
+
+    // Three concentric ring bursts expanding outward
+    [0, 1, 2].forEach((index) => {
+      const ring = this.scene.add.ellipse(centerX, centerY, 48, 36)
+        .setStrokeStyle(index === 0 ? 3 : 2, index === 0 ? outerColor : (index === 1 ? midColor : coreColor), 0.88)
+        .setDepth(depth + index)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: ring,
+        scaleX: 5.5 + (index * 1.8),
+        scaleY: 4.5 + (index * 1.5),
+        alpha: 0,
+        duration: 520 + (index * 100),
+        delay: index * 70,
+        ease: 'Quad.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+    });
+
+    // Vertical energy columns shooting upward (Super Saiyan aura pillars)
+    [-28, -12, 0, 12, 28].forEach((offsetX, index) => {
+      const isCenter = Math.abs(offsetX) < 1;
+      const colHeight = isCenter ? 150 : 90;
+      const col = this.scene.add.rectangle(
+        centerX + offsetX,
+        centerY + 12,
+        isCenter ? 6 : 4,
+        colHeight,
+        index % 2 === 0 ? outerColor : midColor,
+        0.72 - (Math.abs(index - 2) * 0.06),
+      )
+        .setDepth(depth + 2)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: col,
+        y: playerTopY - 80 - (Math.abs(offsetX) * 1.2),
+        scaleY: 0.15,
+        alpha: 0,
+        duration: 560 + (index * 40),
+        delay: index * 28,
+        ease: 'Quad.easeOut',
+        onComplete: () => col.destroy(),
+      });
+    });
+
+    // Floating particle wisps rising from the player base
+    for (let i = 0; i < 14; i += 1) {
+      const px = centerX + Phaser.Math.Between(-40, 40);
+      const py = centerY + Phaser.Math.Between(-8, 16);
+      const wisp = this.scene.add.rectangle(
+        px,
+        py,
+        Phaser.Math.Between(2, 4),
+        Phaser.Math.Between(10, 22),
+        palette[i % palette.length],
+        Phaser.Math.FloatBetween(0.55, 0.88),
+      )
+        .setDepth(depth + 1)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: wisp,
+        y: py - Phaser.Math.Between(55, 110),
+        alpha: 0,
+        scaleY: 0.3,
+        duration: Phaser.Math.Between(400, 680),
+        delay: Phaser.Math.Between(0, 180),
+        ease: 'Quad.easeOut',
+        onComplete: () => wisp.destroy(),
+      });
+    }
+
+    // Subtle screen wash in character color
+    const screenWash = this.scene.add.rectangle(
+      camera.width / 2,
+      camera.height / 2,
+      camera.width,
+      camera.height,
+      midColor,
+      0,
+    )
+      .setScrollFactor(0)
+      .setDepth(depth + 6)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: screenWash,
+      alpha: { from: 0, to: 0.1 },
+      duration: 140,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: screenWash,
+          alpha: 0,
+          duration: 340,
+          ease: 'Sine.easeIn',
+          onComplete: () => screenWash.destroy(),
+        });
+      },
+    });
+
+    // Floating skill label
+    const attackLabel = this.characterConfig?.attackLabels?.specialAttack ?? 'POWER CHARGE';
+    const labelText = this.scene.add.text(centerX, playerTopY - 58, attackLabel.toUpperCase(), {
+      fontFamily: 'Arial',
+      fontSize: '22px',
+      color: '#e8ffff',
+      fontStyle: 'bold',
+      stroke: '#063040',
+      strokeThickness: 4,
+      shadow: { offsetX: 0, offsetY: 0, color: midColorHex, blur: 14, fill: true },
+    }).setOrigin(0.5).setDepth(depth + 7);
+    this.scene.tweens.add({
+      targets: labelText,
+      y: playerTopY - 96,
+      alpha: { from: 0, to: 1 },
+      scaleX: { from: 0.86, to: 1 },
+      scaleY: { from: 0.86, to: 1 },
+      duration: 200,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: labelText,
+          alpha: 0,
+          y: '-=14',
+          duration: 460,
+          delay: 260,
+          ease: 'Sine.easeInOut',
+          onComplete: () => labelText.destroy(),
+        });
+      },
+    });
+  }
+
+  /**
+   * Spawns one rising flame tongue from the character's feet.
+   * 25% chance of a tall SSJ-style column that overshoots the head.
+   */
+  spawnAuraFlameWisp() {
+    if (!this.scene || !this.isSpecialBuffActive()) {
+      return;
+    }
+
+    const palette = this.characterConfig?.effects?.slashPalette ?? [0xe8ffff, 0x62f5ff, 0x9bffea];
+    const centerX = this.body?.center?.x ?? this.x;
+    const bottomY = (this.body?.bottom ?? this.y) + 6;
+    const isTall = Phaser.Math.Between(0, 3) === 0;
+    const px = centerX + Phaser.Math.Between(-32, 32);
+    const height = isTall ? Phaser.Math.Between(100, 180) : Phaser.Math.Between(30, 70);
+    const width = isTall ? Phaser.Math.Between(5, 9) : Phaser.Math.Between(3, 6);
+
+    const wisp = this.scene.add.rectangle(
+      px,
+      bottomY,
+      width,
+      height,
+      palette[Phaser.Math.Between(0, palette.length - 1)],
+      Phaser.Math.FloatBetween(0.5, isTall ? 0.82 : 0.72),
+    )
+      .setDepth(this.depth + 1)
+      .setOrigin(0.5, 1)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    this.scene.tweens.add({
+      targets: wisp,
+      y: bottomY - height - Phaser.Math.Between(isTall ? 50 : 12, isTall ? 100 : 36),
+      alpha: 0,
+      scaleX: isTall ? 0.12 : 0.22,
+      scaleY: isTall ? 0.18 : 0.3,
+      duration: Phaser.Math.Between(isTall ? 520 : 300, isTall ? 860 : 560),
+      delay: Phaser.Math.Between(0, 60),
+      ease: 'Quad.easeOut',
+      onComplete: () => wisp.destroy(),
+    });
+  }
+
+  /**
+   * Spawns one short-lived jagged lightning bolt on either side of the character.
+   * Runs on a repeating timer while the Power Charge buff is active.
+   */
+  spawnSideLightning() {
+    if (!this.scene || !this.isSpecialBuffActive()) {
+      return;
+    }
+
+    const palette = this.characterConfig?.effects?.slashPalette ?? [0xe8ffff, 0x62f5ff, 0x9bffea];
+    const [outerColor, midColor, coreColor] = palette;
+    const centerX = this.body?.center?.x ?? this.x;
+    const topY = (this.body?.top ?? this.y) - 64;
+    const bottomY = (this.body?.bottom ?? this.y) + 8;
+    const depth = this.depth + 4;
+    const side = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
+    const baseX = centerX + (side * Phaser.Math.Between(18, 30));
+
+    const numPoints = Phaser.Math.Between(5, 9);
+    const totalH = bottomY - topY;
+    const segH = totalH / numPoints;
+    const points = [{ x: baseX, y: bottomY }];
+    for (let i = 1; i < numPoints; i += 1) {
+      points.push({ x: baseX + Phaser.Math.Between(-10, 10), y: bottomY - segH * i });
+    }
+    points.push({ x: baseX + Phaser.Math.Between(-4, 4), y: topY });
+
+    const bolt = this.scene.add.graphics()
+      .setDepth(depth)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    const drawBolt = (color, lineWidth, alpha) => {
+      bolt.lineStyle(lineWidth, color, alpha);
+      bolt.beginPath();
+      bolt.moveTo(points[0].x, points[0].y);
+      points.slice(1).forEach((p) => bolt.lineTo(p.x, p.y));
+      bolt.strokePath();
+    };
+
+    drawBolt(outerColor, 5, 0.28);
+    drawBolt(midColor, 2.5, 0.64);
+    drawBolt(coreColor, 1.5, 0.96);
+
+    const sparkX = points[Math.floor(points.length / 2)].x;
+    const sparkY = points[Math.floor(points.length / 2)].y;
+    const spark = this.scene.add.ellipse(sparkX, sparkY, 10, 10, coreColor, 0.78)
+      .setDepth(depth + 1)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    const duration = Phaser.Math.Between(100, 180);
+    this.scene.tweens.add({
+      targets: [bolt, spark],
+      alpha: 0,
+      duration,
+      ease: 'Quad.easeIn',
+      onComplete: () => { bolt.destroy(); spark.destroy(); },
+    });
+  }
+
+  ensureSpecialBuffVisuals() {
+    const palette = this.characterConfig?.effects?.slashPalette ?? [0xe8ffff, 0x62f5ff, 0x9bffea];
+    const [outerColor, midColor, coreColor] = palette;
+    const centerX = this.body?.center?.x ?? this.x;
+    const centerY = this.body?.center?.y ?? this.y;
+    const bottomY = (this.body?.bottom ?? this.y) + 2;
+
+    // Ground aura disc — ellipse at feet that pulses gently
+    if (!this.specialBuffGroundDisc) {
+      this.specialBuffGroundDisc = this.scene.add.ellipse(centerX, bottomY, 96, 18, midColor, 0.38)
+        .setDepth(this.depth - 1)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: this.specialBuffGroundDisc,
+        scaleX: { from: 0.82, to: 1.22 },
+        alpha: { from: 0.24, to: 0.52 },
+        duration: 520,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    // Outer body aura — tall ellipse wrapping the whole character silhouette
+    if (!this.specialBuffBodyGlow) {
+      this.specialBuffBodyGlow = this.scene.add.ellipse(centerX, centerY - 8, 64, 110, outerColor, 0.14)
+        .setDepth(this.depth - 1)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: this.specialBuffBodyGlow,
+        scaleX: { from: 0.86, to: 1.22 },
+        scaleY: { from: 0.9, to: 1.14 },
+        alpha: { from: 0.08, to: 0.28 },
+        duration: 380,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    // Inner core glow — tight bright ellipse centered on body
+    if (!this.specialBuffInnerCore) {
+      this.specialBuffInnerCore = this.scene.add.ellipse(centerX, centerY - 6, 30, 52, coreColor, 0.42)
+        .setDepth(this.depth + 2)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: this.specialBuffInnerCore,
+        alpha: { from: 0.26, to: 0.58 },
+        scaleX: { from: 0.88, to: 1.12 },
+        duration: 240,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
+
+    if (!this.specialBuffStackBar) {
+      this.specialBuffStackBar = this.scene.add.graphics()
+        .setDepth(this.depth + 4);
+    }
+
+    if (!this.specialBuffFlameTimer) {
+      this.specialBuffFlameTimer = this.scene.time.addEvent({
+        delay: 55,
+        loop: true,
+        callback: this.spawnAuraFlameWisp,
+        callbackScope: this,
+      });
+    }
+
+    if (!this.specialBuffLightningTimer) {
+      this.specialBuffLightningTimer = this.scene.time.addEvent({
+        delay: 160,
+        loop: true,
+        callback: this.spawnSideLightning,
+        callbackScope: this,
+      });
+    }
+  }
+
+  updateSpecialBuffVisuals() {
+    if (!this.isSpecialBuffActive()) {
+      this.clearSpecialBuffVisuals();
+      return;
+    }
+
+    this.ensureSpecialBuffVisuals();
+    const centerX = this.body?.center?.x ?? this.x;
+    const centerY = this.body?.center?.y ?? this.y;
+    const topY = this.body?.top ?? (this.y - 44);
+    const bottomY = (this.body?.bottom ?? this.y) + 2;
+    this.specialBuffGroundDisc?.setPosition(centerX, bottomY);
+    this.specialBuffBodyGlow?.setPosition(centerX, centerY - 8);
+    this.specialBuffInnerCore?.setPosition(centerX, centerY - 6);
+
+    if (!this.specialBuffStackBar) {
+      return;
+    }
+
+    const segmentWidth = 12;
+    const segmentHeight = 5;
+    const gap = 3;
+    const totalWidth = (segmentWidth * this.specialBuffMaxStacks) + (gap * (this.specialBuffMaxStacks - 1));
+    const startX = centerX - (totalWidth / 2);
+    const y = topY - 26;
+
+    this.specialBuffStackBar.clear();
+    for (let index = 0; index < this.specialBuffMaxStacks; index += 1) {
+      const filled = index < this.specialBuffStacks;
+      const x = startX + (index * (segmentWidth + gap));
+      this.specialBuffStackBar.fillStyle(filled ? 0x80f7ff : 0x1f3a46, filled ? 0.94 : 0.62);
+      this.specialBuffStackBar.fillRect(x, y, segmentWidth, segmentHeight);
+      this.specialBuffStackBar.lineStyle(1, filled ? 0xf6ffff : 0x4b6670, 0.92);
+      this.specialBuffStackBar.strokeRect(x, y, segmentWidth, segmentHeight);
+    }
+  }
+
+  clearSpecialBuffVisuals() {
+    this.specialBuffFlameTimer?.remove(false);
+    this.specialBuffFlameTimer = null;
+    this.specialBuffLightningTimer?.remove(false);
+    this.specialBuffLightningTimer = null;
+    this.specialBuffHpRegenLastAt = null;
+    this.specialBuffGroundDisc?.destroy();
+    this.specialBuffGroundDisc = null;
+    this.specialBuffBodyGlow?.destroy();
+    this.specialBuffBodyGlow = null;
+    this.specialBuffInnerCore?.destroy();
+    this.specialBuffInnerCore = null;
+    this.specialBuffAura?.destroy();
+    this.specialBuffAura = null;
+    this.specialBuffStackBar?.destroy();
+    this.specialBuffStackBar = null;
+  }
+
+  playSpecialSkillAuraEffect() {
+    if (!this.scene) return;
+    const characterId = this.characterConfig?.id;
+    if (characterId === 'axion') return;
+    const specialAttackKey = this.getOptionalAnimationKey('specialAttack');
+    const specialAnimation = specialAttackKey ? this.scene.anims.get(specialAttackKey) : null;
+    const specialDurationMs = specialAnimation
+      ? Math.max(800, Math.ceil((specialAnimation.frames.length / Math.max(specialAnimation.frameRate, 1)) * 1000))
+      : 1200;
+    const totalDurationMs = specialDurationMs + 2000;
+    if (characterId === 'bladedStaff') this.playBladedStaffSpecialAura(totalDurationMs);
+    else if (characterId === 'reaper') this.playReaperSpecialAura(totalDurationMs);
+    else if (characterId === 'luneblade') this.playLunebladeSpecialAura(totalDurationMs);
+  }
+
+  playBladedStaffSpecialAura(durationMs) {
+    if (!this.scene) return;
+    const palette = [0x6ddb6d, 0xa8e84c, 0xd4e88a, 0xe8d070, 0xffffff];
+    const [windGreen, leafGreen, lightGreen] = palette;
+    const fadeDuration = 700;
+    const fadeDelay = Math.max(300, durationMs - fadeDuration);
+    const depth = this.depth - 1;
+    const getPos = () => ({
+      cx: this.body?.center?.x ?? this.x,
+      by: (this.body?.bottom ?? this.y) + 4,
+      cy: this.body?.center?.y ?? this.y,
+      ty: this.body?.top ?? (this.y - 44),
+    });
+    const { cx, by, cy, ty } = getPos();
+
+    // Intro burst — screen green wash
+    const camera = this.scene.cameras.main;
+    const screenWash = this.scene.add.rectangle(camera.width / 2, camera.height / 2, camera.width, camera.height, windGreen, 0)
+      .setScrollFactor(0).setDepth(this.depth + 6).setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: screenWash, alpha: { from: 0, to: 0.07 }, duration: 120, ease: 'Sine.easeOut',
+      onComplete: () => this.scene?.tweens.add({ targets: screenWash, alpha: 0, duration: 380, onComplete: () => screenWash.destroy() }),
+    });
+
+    // Burst ring expand from ground
+    [0, 1, 2].forEach((i) => {
+      const ring = this.scene.add.ellipse(cx, by, 50, 12)
+        .setStrokeStyle(3 - i * 0.5, [windGreen, leafGreen, lightGreen][i], 0.88)
+        .setDepth(this.depth + 2).setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: ring, scaleX: 4.5 + i * 1.4, scaleY: 4.5 + i * 1.4, alpha: 0,
+        duration: 500 + i * 80, delay: i * 65, ease: 'Quad.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+    });
+
+    // Wind pillars shooting upward
+    [-26, -10, 0, 10, 26].forEach((ox, i) => {
+      const isCenter = ox === 0;
+      const col = this.scene.add.rectangle(cx + ox, cy + 10, isCenter ? 6 : 3,
+        isCenter ? 140 : 80, i % 2 === 0 ? windGreen : leafGreen,
+        0.70 - Math.abs(i - 2) * 0.08)
+        .setDepth(this.depth + 2).setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: col, y: ty - 80 - Math.abs(ox) * 1.2, scaleY: 0.12, alpha: 0,
+        duration: 540 + i * 40, delay: i * 28, ease: 'Quad.easeOut',
+        onComplete: () => col.destroy(),
+      });
+    });
+
+    // Skill label
+    const labelText = this.scene.add.text(cx, ty - 52, 'GALE FORCE', {
+      fontFamily: 'Arial', fontSize: '20px', color: '#d4ffb0', fontStyle: 'bold',
+      stroke: '#1a3a00', strokeThickness: 4,
+      shadow: { offsetX: 0, offsetY: 0, color: '#6ddb6d', blur: 12, fill: true },
+    }).setOrigin(0.5).setDepth(this.depth + 7);
+    this.scene.tweens.add({
+      targets: labelText, y: ty - 86, alpha: { from: 0, to: 1 }, scaleX: { from: 0.8, to: 1 }, scaleY: { from: 0.8, to: 1 },
+      duration: 200, ease: 'Back.easeOut',
+      onComplete: () => this.scene?.tweens.add({
+        targets: labelText, alpha: 0, y: '-=14', duration: 500, delay: 300, ease: 'Sine.easeIn',
+        onComplete: () => labelText.destroy(),
+      }),
+    });
+
+    // Persistent: double ground wind disc
+    const groundDisc = this.scene.add.ellipse(cx, by, 124, 28, windGreen, 0.22)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth);
+    const groundDiscInner = this.scene.add.ellipse(cx, by, 74, 16, leafGreen, 0.38)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 1);
+    this.scene.tweens.add({ targets: groundDisc, scaleX: { from: 0.72, to: 1.34 }, alpha: { from: 0.14, to: 0.34 }, duration: 430, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.scene.tweens.add({ targets: groundDiscInner, scaleX: { from: 0.80, to: 1.22 }, alpha: { from: 0.22, to: 0.54 }, duration: 330, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    // Persistent: body wind glow (tall)
+    const bodyGlow = this.scene.add.ellipse(cx, cy - 10, 76, 134, windGreen, 0.13)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth);
+    this.scene.tweens.add({ targets: bodyGlow, scaleX: { from: 0.84, to: 1.24 }, alpha: { from: 0.07, to: 0.22 }, duration: 390, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    // Persistent: 4 tornado funnel bases orbiting the character
+    const tornadoOffsets = [[-42, -6], [42, -6], [-26, -20], [26, -20]];
+    const tornadoDiscs = tornadoOffsets.map(([ox, oy], i) => {
+      const td = this.scene.add.ellipse(cx + ox, by + oy, 20, 10, leafGreen, 0.48)
+        .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 2);
+      this.scene.tweens.add({ targets: td, scaleX: { from: 0.7, to: 1.5 }, scaleY: { from: 0.7, to: 1.4 }, alpha: { from: 0.26, to: 0.64 }, duration: 250 + i * 30, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      return td;
+    });
+
+    // Tornado particle columns spiraling upward from each funnel base
+    const tornadoTimer = this.scene.time.addEvent({
+      delay: 50, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby } = getPos();
+        const [ox, oy] = tornadoOffsets[Phaser.Math.Between(0, 3)];
+        const col = this.scene.add.rectangle(
+          pcx + ox + Phaser.Math.Between(-7, 7), pby + oy,
+          Phaser.Math.Between(3, 8), Phaser.Math.Between(18, 42),
+          palette[Phaser.Math.Between(0, 3)], 0.84,
+        ).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 2);
+        this.scene.tweens.add({
+          targets: col, x: col.x + Phaser.Math.Between(-14, 14), y: col.y - Phaser.Math.Between(65, 140),
+          alpha: 0, scaleX: 0.35, duration: Phaser.Math.Between(380, 680), ease: 'Quad.easeOut',
+          onComplete: () => col.destroy(),
+        });
+      },
+    });
+
+    // Wind streaks sweeping sideways at multiple heights
+    const windStreakTimer = this.scene.time.addEvent({
+      delay: 88, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, cy: pcy } = getPos();
+        const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
+        const streak = this.scene.add.rectangle(
+          pcx, pcy + Phaser.Math.Between(-55, 10),
+          Phaser.Math.Between(36, 96), Phaser.Math.FloatBetween(1.5, 3.5),
+          palette[Phaser.Math.Between(0, 3)], 0.62,
+        ).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 1);
+        this.scene.tweens.add({
+          targets: streak, x: streak.x + dir * Phaser.Math.Between(70, 150), alpha: 0,
+          duration: Phaser.Math.Between(180, 320), ease: 'Cubic.easeOut',
+          onComplete: () => streak.destroy(),
+        });
+      },
+    });
+
+    // Leaves spinning and drifting upward
+    const leafTimer = this.scene.time.addEvent({
+      delay: 68, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby } = getPos();
+        const color = palette[Phaser.Math.Between(0, 3)];
+        const leaf = this.scene.add.rectangle(
+          pcx + Phaser.Math.Between(-38, 38), pby,
+          Phaser.Math.Between(5, 12), Phaser.Math.Between(3, 7), color, 0.92,
+        ).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 2)
+          .setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
+        this.scene.tweens.add({
+          targets: leaf, x: leaf.x + Phaser.Math.Between(-44, 44), y: leaf.y - Phaser.Math.Between(90, 190),
+          alpha: 0, rotation: leaf.rotation + Phaser.Math.FloatBetween(-3, 3),
+          duration: Phaser.Math.Between(700, 1200), ease: 'Quad.easeOut',
+          onComplete: () => leaf.destroy(),
+        });
+      },
+    });
+
+    // Wind spore puffs expanding softly
+    const sporeTimer = this.scene.time.addEvent({
+      delay: 115, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby } = getPos();
+        const spore = this.scene.add.circle(
+          pcx + Phaser.Math.Between(-30, 30), pby + Phaser.Math.Between(-12, 0),
+          Phaser.Math.Between(4, 11), lightGreen, 0.38,
+        ).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth);
+        this.scene.tweens.add({
+          targets: spore, scaleX: 2.6, scaleY: 2.6, alpha: 0, y: spore.y - Phaser.Math.Between(30, 65),
+          duration: Phaser.Math.Between(380, 640), ease: 'Quad.easeOut',
+          onComplete: () => spore.destroy(),
+        });
+      },
+    });
+
+    // Follow player position for persistent elements
+    const posUpdateTimer = this.scene.time.addEvent({
+      delay: 16, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby, cy: pcy } = getPos();
+        groundDisc.setPosition(pcx, pby);
+        groundDiscInner.setPosition(pcx, pby);
+        bodyGlow.setPosition(pcx, pcy - 10);
+        tornadoDiscs.forEach((td, i) => td.active && td.setPosition(pcx + tornadoOffsets[i][0], pby + tornadoOffsets[i][1]));
+      },
+    });
+
+    this.scene.time.delayedCall(fadeDelay, () => {
+      tornadoTimer.remove(false);
+      windStreakTimer.remove(false);
+      leafTimer.remove(false);
+      sporeTimer.remove(false);
+      posUpdateTimer.remove(false);
+      const fadeTargets = [groundDisc, groundDiscInner, bodyGlow, ...tornadoDiscs];
+      this.scene?.tweens.add({
+        targets: fadeTargets, alpha: 0, duration: fadeDuration,
+        onComplete: () => fadeTargets.forEach((t) => t?.destroy()),
+      });
+    });
+  }
+
+  playReaperSpecialAura(durationMs) {
+    if (!this.scene) return;
+    const darkPalette = [0x0a000f, 0x1a0028, 0x2d0050, 0x3d0068];
+    const glowPalette = [0x8b00cc, 0x6b00a8, 0xb030ff, 0xd060ff];
+    const fadeDuration = 700;
+    const fadeDelay = Math.max(300, durationMs - fadeDuration);
+    const depth = this.depth - 1;
+    const getPos = () => ({
+      cx: this.body?.center?.x ?? this.x,
+      by: (this.body?.bottom ?? this.y) + 4,
+      cy: this.body?.center?.y ?? this.y,
+      ty: this.body?.top ?? (this.y - 44),
+    });
+    const { cx, by, cy, ty } = getPos();
+
+    // Intro burst — dark screen wash + purple core flash
+    const camera = this.scene.cameras.main;
+    const screenWash = this.scene.add.rectangle(camera.width / 2, camera.height / 2, camera.width, camera.height, 0x1a0028, 0)
+      .setScrollFactor(0).setDepth(this.depth + 6);
+    this.scene.tweens.add({
+      targets: screenWash, alpha: { from: 0, to: 0.22 }, duration: 160, ease: 'Sine.easeOut',
+      onComplete: () => this.scene?.tweens.add({ targets: screenWash, alpha: 0, duration: 440, onComplete: () => screenWash.destroy() }),
+    });
+
+    const purpleFlash = this.scene.add.ellipse(cx, cy, 92, 72, 0xb030ff, 0.62)
+      .setDepth(this.depth + 5).setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({ targets: purpleFlash, scaleX: 4.2, scaleY: 3.6, alpha: 0, duration: 400, ease: 'Cubic.easeOut', onComplete: () => purpleFlash.destroy() });
+
+    // Void ring burst expand from ground
+    [0, 1, 2].forEach((i) => {
+      const ring = this.scene.add.ellipse(cx, by, 62, 14)
+        .setStrokeStyle(3 - i * 0.5, glowPalette[i], 0.88)
+        .setDepth(this.depth + 2).setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: ring, scaleX: 4.8 + i * 1.6, scaleY: 4.8 + i * 1.6, alpha: 0,
+        duration: 520 + i * 100, delay: i * 70, ease: 'Quad.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+    });
+
+    // Burst smoke columns erupting from ground
+    for (let i = 0; i < 8; i += 1) {
+      const bc = this.scene.add.rectangle(
+        cx + Phaser.Math.Between(-42, 42), by,
+        Phaser.Math.Between(10, 24), Phaser.Math.Between(32, 76),
+        darkPalette[Phaser.Math.Between(1, 3)], 0.82,
+      ).setDepth(this.depth + 1).setOrigin(0.5, 1);
+      this.scene.tweens.add({
+        targets: bc, y: bc.y - Phaser.Math.Between(90, 180), alpha: 0, scaleX: 1.9,
+        duration: Phaser.Math.Between(520, 900), delay: Phaser.Math.Between(0, 130), ease: 'Cubic.easeOut',
+        onComplete: () => bc.destroy(),
+      });
+    }
+
+    // Skill label
+    const labelText = this.scene.add.text(cx, ty - 52, 'ABYSS SURGE', {
+      fontFamily: 'Arial', fontSize: '20px', color: '#c060ff', fontStyle: 'bold',
+      stroke: '#0a000f', strokeThickness: 5,
+      shadow: { offsetX: 0, offsetY: 0, color: '#8b00cc', blur: 14, fill: true },
+    }).setOrigin(0.5).setDepth(this.depth + 7);
+    this.scene.tweens.add({
+      targets: labelText, y: ty - 86, alpha: { from: 0, to: 1 }, scaleX: { from: 0.8, to: 1 }, scaleY: { from: 0.8, to: 1 },
+      duration: 200, ease: 'Back.easeOut',
+      onComplete: () => this.scene?.tweens.add({
+        targets: labelText, alpha: 0, y: '-=14', duration: 480, delay: 300, ease: 'Sine.easeIn',
+        onComplete: () => labelText.destroy(),
+      }),
+    });
+
+    // Persistent: large dark shadow pool + outer glow ring
+    const shadowPool = this.scene.add.ellipse(cx, by, 134, 30, 0x05000a, 0.84)
+      .setDepth(depth);
+    const groundGlow = this.scene.add.ellipse(cx, by, 148, 36, 0x6b00a8, 0.26)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 1);
+    this.scene.tweens.add({ targets: shadowPool, scaleX: { from: 0.82, to: 1.30 }, alpha: { from: 0.58, to: 0.90 }, duration: 540, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.scene.tweens.add({ targets: groundGlow, scaleX: { from: 0.78, to: 1.34 }, alpha: { from: 0.14, to: 0.40 }, duration: 460, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    // Persistent: layered body aura (dark outer + purple inner glow)
+    const bodyAuraOuter = this.scene.add.ellipse(cx, cy - 10, 84, 148, 0x2d0050, 0.34)
+      .setDepth(depth);
+    const bodyAuraInner = this.scene.add.ellipse(cx, cy - 8, 54, 106, 0x8b00cc, 0.18)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 1);
+    const bodyAuraCore = this.scene.add.ellipse(cx, cy - 6, 30, 64, 0xd060ff, 0.10)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 2);
+    this.scene.tweens.add({ targets: bodyAuraOuter, scaleX: { from: 0.86, to: 1.22 }, alpha: { from: 0.20, to: 0.44 }, duration: 400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.scene.tweens.add({ targets: bodyAuraInner, scaleX: { from: 0.80, to: 1.26 }, alpha: { from: 0.10, to: 0.30 }, duration: 320, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.scene.tweens.add({ targets: bodyAuraCore, scaleX: { from: 0.76, to: 1.30 }, alpha: { from: 0.06, to: 0.20 }, duration: 250, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    // Dense dark smoke columns rising from feet
+    const smokeTimer = this.scene.time.addEvent({
+      delay: 62, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby } = getPos();
+        const isTall = Phaser.Math.Between(0, 3) === 0;
+        const smoke = this.scene.add.rectangle(
+          pcx + Phaser.Math.Between(-30, 30), pby,
+          Phaser.Math.Between(14, 34), isTall ? Phaser.Math.Between(80, 170) : Phaser.Math.Between(30, 72),
+          darkPalette[Phaser.Math.Between(1, 3)], 0.80,
+        ).setDepth(depth + 2).setOrigin(0.5, 1);
+        this.scene.tweens.add({
+          targets: smoke, y: smoke.y - Phaser.Math.Between(70, 160), alpha: 0, scaleX: 1.8, scaleY: 0.3,
+          duration: Phaser.Math.Between(520, 950), ease: 'Cubic.easeOut',
+          onComplete: () => smoke.destroy(),
+        });
+      },
+    });
+
+    // Purple ghost flames rising with ADD blend
+    const ghostFlameTimer = this.scene.time.addEvent({
+      delay: 75, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby } = getPos();
+        const isTall = Phaser.Math.Between(0, 4) === 0;
+        const flame = this.scene.add.rectangle(
+          pcx + Phaser.Math.Between(-24, 24), pby,
+          Phaser.Math.Between(4, 10), isTall ? Phaser.Math.Between(100, 190) : Phaser.Math.Between(36, 74),
+          glowPalette[Phaser.Math.Between(0, 3)], 0.74,
+        ).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 3).setOrigin(0.5, 1);
+        this.scene.tweens.add({
+          targets: flame, y: flame.y - Phaser.Math.Between(62, 150), alpha: 0, scaleX: 0.28, scaleY: 0.18,
+          duration: Phaser.Math.Between(450, 780), ease: 'Quad.easeOut',
+          onComplete: () => flame.destroy(),
+        });
+      },
+    });
+
+    // Void pulse rings expanding from feet
+    const voidRingTimer = this.scene.time.addEvent({
+      delay: 230, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby } = getPos();
+        const ring = this.scene.add.graphics().setDepth(depth + 2);
+        ring.lineStyle(3, glowPalette[Phaser.Math.Between(0, 2)], 0.66);
+        ring.strokeEllipse(0, 0, 72, 16);
+        ring.setPosition(pcx, pby);
+        this.scene.tweens.add({
+          targets: ring, scaleX: 3.0, scaleY: 3.0, alpha: 0,
+          duration: 500, ease: 'Cubic.easeOut',
+          onComplete: () => ring.destroy(),
+        });
+      },
+    });
+
+    // Multi-layer side tendrils lashing outward
+    const tendrilTimer = this.scene.time.addEvent({
+      delay: 155, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, cy: pcy } = getPos();
+        const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
+        const yOff = Phaser.Math.Between(-46, 18);
+        const color = glowPalette[Phaser.Math.Between(0, 3)];
+        [{ w: 5.5, a: 0.26 }, { w: 2.5, a: 0.62 }, { w: 1.2, a: 0.94 }].forEach(({ w, a }) => {
+          const t = this.scene.add.rectangle(
+            pcx + dir * 18, pcy + yOff, Phaser.Math.Between(24, 62), w, color, a,
+          ).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 3);
+          this.scene.tweens.add({
+            targets: t, x: t.x + dir * Phaser.Math.Between(52, 108), alpha: 0,
+            duration: Phaser.Math.Between(220, 400), ease: 'Cubic.easeOut',
+            onComplete: () => t.destroy(),
+          });
+        });
+      },
+    });
+
+    // Ash / soul spark particles drifting upward
+    const ashTimer = this.scene.time.addEvent({
+      delay: 95, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby } = getPos();
+        const ash = this.scene.add.circle(
+          pcx + Phaser.Math.Between(-32, 32), pby,
+          Phaser.Math.Between(2, 5), glowPalette[Phaser.Math.Between(0, 3)], 0.72,
+        ).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 2);
+        this.scene.tweens.add({
+          targets: ash, y: ash.y - Phaser.Math.Between(62, 140), x: ash.x + Phaser.Math.Between(-18, 18),
+          alpha: 0, duration: Phaser.Math.Between(600, 1050), ease: 'Quad.easeOut',
+          onComplete: () => ash.destroy(),
+        });
+      },
+    });
+
+    // Dark soul wisps (wide smear shapes drifting sideways)
+    const wispTimer = this.scene.time.addEvent({
+      delay: 180, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, cy: pcy } = getPos();
+        const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
+        const wisp = this.scene.add.rectangle(
+          pcx, pcy + Phaser.Math.Between(-40, 20),
+          Phaser.Math.Between(20, 48), Phaser.Math.Between(8, 18),
+          darkPalette[Phaser.Math.Between(2, 3)], 0.55,
+        ).setDepth(depth + 1);
+        this.scene.tweens.add({
+          targets: wisp, x: wisp.x + dir * Phaser.Math.Between(30, 70), y: wisp.y - Phaser.Math.Between(20, 50),
+          alpha: 0, scaleX: 1.5, duration: Phaser.Math.Between(400, 700), ease: 'Quad.easeOut',
+          onComplete: () => wisp.destroy(),
+        });
+      },
+    });
+
+    // Follow player position for persistent elements
+    const posUpdateTimer = this.scene.time.addEvent({
+      delay: 16, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby, cy: pcy } = getPos();
+        shadowPool.setPosition(pcx, pby);
+        groundGlow.setPosition(pcx, pby);
+        bodyAuraOuter.setPosition(pcx, pcy - 10);
+        bodyAuraInner.setPosition(pcx, pcy - 8);
+        bodyAuraCore.setPosition(pcx, pcy - 6);
+      },
+    });
+
+    this.scene.time.delayedCall(fadeDelay, () => {
+      smokeTimer.remove(false);
+      ghostFlameTimer.remove(false);
+      voidRingTimer.remove(false);
+      tendrilTimer.remove(false);
+      ashTimer.remove(false);
+      wispTimer.remove(false);
+      posUpdateTimer.remove(false);
+      const fadeTargets = [shadowPool, groundGlow, bodyAuraOuter, bodyAuraInner, bodyAuraCore];
+      this.scene?.tweens.add({
+        targets: fadeTargets, alpha: 0, duration: fadeDuration,
+        onComplete: () => fadeTargets.forEach((t) => t?.destroy()),
+      });
+    });
+  }
+
+  playLunebladeSpecialAura(durationMs) {
+    if (!this.scene) return;
+    const icePalette = [0xd0f4ff, 0x8ae8ff, 0xb8eeff, 0xffffff, 0x50c8ff];
+    const [iceWhite, iceCyan, iceMid, white, deepCyan] = icePalette;
+    const fadeDuration = 700;
+    const fadeDelay = Math.max(300, durationMs - fadeDuration);
+    const depth = this.depth - 1;
+    const getPos = () => ({
+      cx: this.body?.center?.x ?? this.x,
+      by: (this.body?.bottom ?? this.y) + 4,
+      cy: this.body?.center?.y ?? this.y,
+      ty: this.body?.top ?? (this.y - 44),
+    });
+    const { cx, by, cy, ty } = getPos();
+
+    // Intro burst — ice white screen flash
+    const camera = this.scene.cameras.main;
+    const screenWash = this.scene.add.rectangle(camera.width / 2, camera.height / 2, camera.width, camera.height, iceCyan, 0)
+      .setScrollFactor(0).setDepth(this.depth + 6).setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: screenWash, alpha: { from: 0, to: 0.09 }, duration: 130, ease: 'Sine.easeOut',
+      onComplete: () => this.scene?.tweens.add({ targets: screenWash, alpha: 0, duration: 360, onComplete: () => screenWash.destroy() }),
+    });
+
+    // Ice core flash expanding
+    const iceFlash = this.scene.add.ellipse(cx, cy, 82, 62, white, 0.82)
+      .setDepth(this.depth + 5).setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({ targets: iceFlash, scaleX: 4.0, scaleY: 3.4, alpha: 0, duration: 370, ease: 'Cubic.easeOut', onComplete: () => iceFlash.destroy() });
+
+    // Ice ring burst from ground
+    [0, 1, 2].forEach((i) => {
+      const ring = this.scene.add.ellipse(cx, by, 54, 12)
+        .setStrokeStyle(3 - i * 0.5, [white, iceCyan, iceWhite][i], 0.90)
+        .setDepth(this.depth + 2).setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: ring, scaleX: 5.2 + i * 1.6, scaleY: 5.2 + i * 1.6, alpha: 0,
+        duration: 510 + i * 80, delay: i * 62, ease: 'Quad.easeOut',
+        onComplete: () => ring.destroy(),
+      });
+    });
+
+    // Ice pillars shooting upward
+    [-26, -10, 0, 10, 26].forEach((ox, i) => {
+      const isCenter = ox === 0;
+      const col = this.scene.add.rectangle(cx + ox, cy + 10, isCenter ? 6 : 3,
+        isCenter ? 158 : 86, i % 2 === 0 ? iceCyan : iceWhite,
+        0.72 - Math.abs(i - 2) * 0.08)
+        .setDepth(this.depth + 2).setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: col, y: ty - 92 - Math.abs(ox) * 1.2, scaleY: 0.12, alpha: 0,
+        duration: 555 + i * 38, delay: i * 30, ease: 'Quad.easeOut',
+        onComplete: () => col.destroy(),
+      });
+    });
+
+    // Skill label
+    const labelText = this.scene.add.text(cx, ty - 52, 'FROST SURGE', {
+      fontFamily: 'Arial', fontSize: '20px', color: '#d0f4ff', fontStyle: 'bold',
+      stroke: '#002040', strokeThickness: 4,
+      shadow: { offsetX: 0, offsetY: 0, color: '#8ae8ff', blur: 12, fill: true },
+    }).setOrigin(0.5).setDepth(this.depth + 7);
+    this.scene.tweens.add({
+      targets: labelText, y: ty - 86, alpha: { from: 0, to: 1 }, scaleX: { from: 0.8, to: 1 }, scaleY: { from: 0.8, to: 1 },
+      duration: 200, ease: 'Back.easeOut',
+      onComplete: () => this.scene?.tweens.add({
+        targets: labelText, alpha: 0, y: '-=14', duration: 480, delay: 300, ease: 'Sine.easeIn',
+        onComplete: () => labelText.destroy(),
+      }),
+    });
+
+    // Persistent: double ice ground disc
+    const iceDisc = this.scene.add.ellipse(cx, by, 126, 28, iceCyan, 0.32)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth);
+    const iceDiscInner = this.scene.add.ellipse(cx, by, 76, 16, white, 0.44)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 1);
+    this.scene.tweens.add({ targets: iceDisc, scaleX: { from: 0.74, to: 1.32 }, alpha: { from: 0.18, to: 0.42 }, duration: 450, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.scene.tweens.add({ targets: iceDiscInner, scaleX: { from: 0.80, to: 1.24 }, alpha: { from: 0.26, to: 0.56 }, duration: 350, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    // Persistent: layered body ice glow
+    const bodyGlowOuter = this.scene.add.ellipse(cx, cy - 10, 80, 142, iceCyan, 0.14)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth);
+    const bodyGlowInner = this.scene.add.ellipse(cx, cy - 8, 50, 100, white, 0.10)
+      .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 1);
+    this.scene.tweens.add({ targets: bodyGlowOuter, scaleX: { from: 0.84, to: 1.26 }, alpha: { from: 0.08, to: 0.24 }, duration: 390, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.scene.tweens.add({ targets: bodyGlowInner, scaleX: { from: 0.82, to: 1.20 }, alpha: { from: 0.06, to: 0.18 }, duration: 310, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    // Snowflakes drifting upward
+    const snowTimer = this.scene.time.addEvent({
+      delay: 52, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby } = getPos();
+        const color = icePalette[Phaser.Math.Between(0, icePalette.length - 1)];
+        const flake = this.scene.add.circle(
+          pcx + Phaser.Math.Between(-36, 36), pby,
+          Phaser.Math.Between(2, 5), color, 0.90,
+        ).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 2);
+        this.scene.tweens.add({
+          targets: flake, x: flake.x + Phaser.Math.Between(-24, 24), y: flake.y - Phaser.Math.Between(90, 170),
+          alpha: 0, duration: Phaser.Math.Between(750, 1150), ease: 'Quad.easeOut',
+          onComplete: () => flake.destroy(),
+        });
+      },
+    });
+
+    // Cold mist puffs expanding upward
+    const mistTimer = this.scene.time.addEvent({
+      delay: 82, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby } = getPos();
+        const mist = this.scene.add.ellipse(
+          pcx + Phaser.Math.Between(-26, 26), pby,
+          Phaser.Math.Between(38, 66), Phaser.Math.Between(12, 24), iceWhite, 0.28,
+        ).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 1);
+        this.scene.tweens.add({
+          targets: mist, y: mist.y - Phaser.Math.Between(52, 115), scaleX: 2.2, scaleY: 1.7, alpha: 0,
+          duration: Phaser.Math.Between(560, 940), ease: 'Quad.easeOut',
+          onComplete: () => mist.destroy(),
+        });
+      },
+    });
+
+    // Ice wind gusts sweeping sideways at multiple heights
+    const gustTimer = this.scene.time.addEvent({
+      delay: 92, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, cy: pcy } = getPos();
+        const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
+        const streak = this.scene.add.rectangle(
+          pcx, pcy + Phaser.Math.Between(-55, 10),
+          Phaser.Math.Between(42, 108), Phaser.Math.FloatBetween(1.5, 3.5),
+          icePalette[Phaser.Math.Between(0, 3)], 0.60,
+        ).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 2);
+        this.scene.tweens.add({
+          targets: streak, x: streak.x + dir * Phaser.Math.Between(86, 170), alpha: 0,
+          duration: Phaser.Math.Between(175, 320), ease: 'Cubic.easeOut',
+          onComplete: () => streak.destroy(),
+        });
+      },
+    });
+
+    // Ice lightning bolts — jagged vertical, blue-white (same 3-layer approach as Axion side bolts)
+    const lightningTimer = this.scene.time.addEvent({
+      delay: 135, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby, ty: pty } = getPos();
+        const dir = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
+        const boltX = pcx + dir * Phaser.Math.Between(18, 34);
+        const totalH = Math.abs(pty - pby) + Phaser.Math.Between(20, 54);
+        const segs = Phaser.Math.Between(6, 10);
+        const pts = Array.from({ length: segs + 1 }, (_, s) => ({
+          x: boltX + Phaser.Math.Between(-9, 9),
+          y: pby - (s / segs) * totalH,
+        }));
+
+        const bolt = this.scene.add.graphics().setDepth(depth + 3);
+        [[4.5, deepCyan, 0.20], [2.2, iceCyan, 0.62], [1.0, white, 0.96]].forEach(([lw, col, a]) => {
+          bolt.lineStyle(lw, col, a);
+          bolt.beginPath();
+          pts.forEach((p, i) => (i === 0 ? bolt.moveTo(p.x, p.y) : bolt.lineTo(p.x, p.y)));
+          bolt.strokePath();
+        });
+
+        const mid = pts[Math.floor(segs / 2)];
+        const spark = this.scene.add.circle(mid.x, mid.y, Phaser.Math.Between(3, 6), white, 0.92)
+          .setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 4);
+
+        const boltDur = Phaser.Math.Between(85, 165);
+        this.scene.tweens.add({ targets: bolt, alpha: 0, duration: boltDur, ease: 'Linear', onComplete: () => bolt.destroy() });
+        this.scene.tweens.add({ targets: spark, scaleX: 2.6, scaleY: 2.6, alpha: 0, duration: boltDur, ease: 'Cubic.easeOut', onComplete: () => spark.destroy() });
+      },
+    });
+
+    // Frost ring pulses expanding from feet
+    const frostRingTimer = this.scene.time.addEvent({
+      delay: 290, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby } = getPos();
+        const ring = this.scene.add.graphics().setDepth(depth + 2);
+        ring.lineStyle(2.5, iceCyan, 0.64);
+        ring.strokeEllipse(0, 0, 70, 16);
+        ring.setPosition(pcx, pby);
+        this.scene.tweens.add({
+          targets: ring, scaleX: 2.8, scaleY: 2.8, alpha: 0,
+          duration: 470, ease: 'Cubic.easeOut',
+          onComplete: () => ring.destroy(),
+        });
+      },
+    });
+
+    // Ice crystal shards (thin angled fragments shooting upward)
+    const shardTimer = this.scene.time.addEvent({
+      delay: 170, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby } = getPos();
+        const shard = this.scene.add.rectangle(
+          pcx + Phaser.Math.Between(-34, 34), pby,
+          Phaser.Math.Between(3, 8), Phaser.Math.Between(14, 30),
+          icePalette[Phaser.Math.Between(0, 3)], 0.82,
+        ).setBlendMode(Phaser.BlendModes.ADD).setDepth(depth + 3)
+          .setRotation(Phaser.Math.FloatBetween(-0.6, 0.6));
+        this.scene.tweens.add({
+          targets: shard, y: shard.y - Phaser.Math.Between(62, 130), x: shard.x + Phaser.Math.Between(-22, 22),
+          alpha: 0, rotation: shard.rotation + Phaser.Math.FloatBetween(-1.2, 1.2),
+          duration: Phaser.Math.Between(520, 880), ease: 'Quad.easeOut',
+          onComplete: () => shard.destroy(),
+        });
+      },
+    });
+
+    // Follow player position for persistent elements
+    const posUpdateTimer = this.scene.time.addEvent({
+      delay: 16, loop: true,
+      callback: () => {
+        if (!this.scene || !this.active) return;
+        const { cx: pcx, by: pby, cy: pcy } = getPos();
+        iceDisc.setPosition(pcx, pby);
+        iceDiscInner.setPosition(pcx, pby);
+        bodyGlowOuter.setPosition(pcx, pcy - 10);
+        bodyGlowInner.setPosition(pcx, pcy - 8);
+      },
+    });
+
+    this.scene.time.delayedCall(fadeDelay, () => {
+      snowTimer.remove(false);
+      mistTimer.remove(false);
+      gustTimer.remove(false);
+      lightningTimer.remove(false);
+      frostRingTimer.remove(false);
+      shardTimer.remove(false);
+      posUpdateTimer.remove(false);
+      const fadeTargets = [iceDisc, iceDiscInner, bodyGlowOuter, bodyGlowInner];
+      this.scene?.tweens.add({
+        targets: fadeTargets, alpha: 0, duration: fadeDuration,
+        onComplete: () => fadeTargets.forEach((t) => t?.destroy()),
+      });
+    });
+  }
+
+  deactivateSpecialBuff() {
+    this.specialBuffStacks = 0;
+    this.specialBuffMaxStacks = 0;
+    this.specialBuffCurrentAttackKey = null;
+    this.specialBuffShockwaveApplied = false;
+    this.specialBuffShockwaveActive = false;
+    this.specialAttackHitBox.body.enable = false;
+    this.clearSpecialBuffVisuals();
+  }
+
+  getCurrentSpecialBuffAttackAction() {
+    const currentAnimationKey = this.anims.currentAnim?.key;
+    if (!currentAnimationKey) {
+      return null;
+    }
+
+    return ['smash', 'thrust', 'spinAttack'].find((action) => currentAnimationKey === this.getOptionalAnimationKey(action)) ?? null;
+  }
+
+  getSpecialBuffAttackActiveFrames(action) {
+    const attackProfile = this.getCombatProfile(action);
+    const fallbackActiveFrames = {
+      smash: [{ start: 11, end: 13 }],
+      thrust: [{ start: 1, end: 1 }],
+      spinAttack: [{ start: 1, end: 1 }],
+    };
+
+    return attackProfile?.hitbox?.activeFrames ?? fallbackActiveFrames[action] ?? [];
+  }
+
+  updateSpecialBuffShockwave(specialAttackProfile) {
+    this.updateSpecialBuffVisuals();
+    this.specialAttackHitBox.setVisible(false);
+
+    if (!specialAttackProfile || (this.specialBuffStacks <= 0 && !this.specialBuffShockwaveActive)) {
+      this.specialAttackHitBox.body.enable = false;
+      return;
+    }
+
+    const attackAction = this.getCurrentSpecialBuffAttackAction();
+    const currentAnimationKey = this.anims.currentAnim?.key ?? null;
+    if (!attackAction) {
+      this.specialBuffCurrentAttackKey = null;
+      this.specialBuffShockwaveApplied = false;
+      this.specialBuffShockwaveActive = false;
+      this.specialAttackHitBox.body.enable = false;
+      if (this.specialBuffStacks <= 0) {
+        this.deactivateSpecialBuff();
+      }
+      return;
+    }
+
+    if (this.specialBuffCurrentAttackKey !== currentAnimationKey) {
+      this.specialBuffCurrentAttackKey = currentAnimationKey;
+      this.specialBuffShockwaveApplied = false;
+      this.specialBuffShockwaveActive = false;
+    }
+
+    const currentFrame = this.anims.currentFrame?.index ?? -1;
+    const activeFrames = this.getSpecialBuffAttackActiveFrames(attackAction);
+    const isActiveFrame = this.isFrameWithinActiveWindow(currentFrame, activeFrames);
+    if (!isActiveFrame) {
+      this.specialBuffShockwaveApplied = false;
+      this.specialBuffShockwaveActive = false;
+      this.specialAttackHitBox.body.enable = false;
+      if (this.specialBuffStacks <= 0) {
+        this.deactivateSpecialBuff();
+      }
+      return;
+    }
+
+    if (!this.specialBuffShockwaveApplied && this.specialBuffStacks > 0) {
+      this.specialBuffShockwaveApplied = true;
+      this.specialBuffShockwaveActive = true;
+      this.specialBuffStacks = Math.max(0, this.specialBuffStacks - 1);
+      this.playSpecialBuffShockwaveVisual(specialAttackProfile);
+    }
+
+    if (!this.specialBuffShockwaveActive) {
+      this.specialAttackHitBox.body.enable = false;
+      return;
+    }
+
+    const shockwave = specialAttackProfile?.shockwave ?? {};
+    const width = shockwave.width ?? 600;
+    const height = shockwave.height ?? 92;
+    const offsetX = shockwave.offsetX ?? ((width / 2) + 26);
+    const offsetY = shockwave.offsetY ?? -12;
+    if (this.specialAttackHitBox.width !== width || this.specialAttackHitBox.height !== height) {
+      this.specialAttackHitBox.width = width;
+      this.specialAttackHitBox.height = height;
+      this.specialAttackHitBox.body.setSize(width, height, true);
+    }
+
+    this.specialAttackHitBox.follow(this, this.flipX ? -offsetX : offsetX, offsetY);
+    this.specialAttackHitBox.body.enable = true;
+    this.updateSpecialBuffVisuals();
+
+    if (this.specialBuffStacks <= 0) {
+      this.clearSpecialBuffVisuals();
+    }
+  }
+
+  playSpecialBuffShockwaveVisual(specialAttackProfile = null) {
+    const shockwave = specialAttackProfile?.shockwave ?? {};
+    const length = shockwave.visualLength ?? shockwave.width ?? 600;
+    const direction = this.flipX ? -1 : 1;
+    const startX = this.body?.center?.x ?? this.x;
+    const startY = (this.body?.center?.y ?? this.y) - 12;
+    const bottomY = (this.body?.bottom ?? this.y) + 4;
+    const effectDepth = this.depth + 3;
+    const colors = this.characterConfig?.effects?.slashPalette ?? [0xe8ffff, 0x62f5ff, 0x9bffea];
+    const [outerColor, midColor, coreColor] = colors;
+
+    // Slashing wave arcs that travel away in the character's facing direction
+    [0, 1, 2].forEach((index) => {
+      const arcRadius = 26 + (index * 10);
+      const travelDist = 260 + (index * 55);
+      const wave = this.scene.add.graphics()
+        .setPosition(startX + (direction * 18), startY)
+        .setDepth(effectDepth + index)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(0.9 - (index * 0.16))
+        .setScale(direction, 1);
+
+      wave.lineStyle(6 - (index * 1.5), colors[index % colors.length], 0.88 - (index * 0.1));
+      wave.beginPath();
+      wave.arc(0, 0, arcRadius, -Math.PI * 0.44, Math.PI * 0.44, false);
+      wave.strokePath();
+
+      this.scene.tweens.add({
+        targets: wave,
+        x: startX + (direction * travelDist),
+        scaleX: direction * (1.5 + (index * 0.2)),
+        scaleY: 1.5 + (index * 0.16),
+        alpha: 0,
+        duration: 350 + (index * 60),
+        delay: index * 45,
+        ease: 'Cubic.easeOut',
+        onComplete: () => wave.destroy(),
+      });
+    });
+
+    // Upward flame columns bursting from the player's feet (Super Saiyan style)
+    [-18, -8, 0, 8, 18].forEach((offsetX, idx) => {
+      const isCenter = idx === 2;
+      const flameH = Phaser.Math.Between(40, 72) + (isCenter ? 36 : 0);
+      const flame = this.scene.add.rectangle(
+        startX + offsetX,
+        bottomY,
+        isCenter ? 7 : 4,
+        flameH,
+        idx % 2 === 0 ? outerColor : midColor,
+        0.74 - (Math.abs(idx - 2) * 0.08),
+      )
+        .setDepth(effectDepth + 2)
+        .setOrigin(0.5, 1)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      this.scene.tweens.add({
+        targets: flame,
+        y: bottomY - flameH - Phaser.Math.Between(18, 44),
+        scaleY: 0.1,
+        scaleX: 0.28 + (isCenter ? 0.18 : 0),
+        alpha: 0,
+        duration: Phaser.Math.Between(360, 520),
+        delay: idx * 22,
+        ease: 'Quad.easeOut',
+        onComplete: () => flame.destroy(),
+      });
+    });
+
+    // Core energy flash at origin
+    const coreFlash = this.scene.add.ellipse(startX, startY, 32, 24, coreColor, 0.76)
+      .setDepth(effectDepth + 4)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    this.scene.tweens.add({
+      targets: coreFlash,
+      scaleX: 2.8,
+      scaleY: 2.2,
+      alpha: 0,
+      duration: 260,
+      ease: 'Cubic.easeOut',
+      onComplete: () => coreFlash.destroy(),
+    });
+  }
+
+  /**
    * Starts the R-key action and optionally snaps to a random enemy first.
    */
   beginSpecialAttackAction() {
     const specialAttackProfile = this.getCombatProfile('specialAttack');
+    if (specialAttackProfile?.mode === 'buff') {
+      this.resetAttackAudioState();
+      this.activateSpecialBuff(specialAttackProfile);
+      return;
+    }
+
     this.isSpecialAttackCasting = true;
     this.trackedSpecialEnemy = null;
     this.lastSpecialStrikeFrame = null;
+    this.specialAttackStrikeCount = 0;
+    this.lastSpecialAttackCountedFrame = null;
     this.specialAttackAnchorY = this.y;
     this.specialAttackReturnPosition = {
       x: this.x,
@@ -1138,6 +2484,7 @@ export default class Player extends Character {
     this.isUntouchable = Boolean(this.trackedSpecialEnemy);
     this.playSpecialAttackCastPresentation();
     this.playAnimation('specialAttack');
+    this.playSpecialSkillAuraEffect();
   }
 
   /**
@@ -1975,6 +3322,8 @@ export default class Player extends Character {
       this.trackedSurpriseEnemy = null;
       this.trackedSpecialEnemy = null;
       this.lastSpecialStrikeFrame = null;
+      this.specialAttackStrikeCount = 0;
+      this.lastSpecialAttackCountedFrame = null;
       this.specialAttackAnchorY = null;
       this.specialAttackCastOrigin = null;
       this.specialAttackReturnPosition = null;
@@ -2059,10 +3408,11 @@ export default class Player extends Character {
         && this.getOptionalAnimationKey('specialAttack')
       ) {
         const specialAttackHpCost = this.getHpCost('specialAttack');
+        const specialAttackProfile = this.getCombatProfile('specialAttack');
         if (!this.canSpendHp(specialAttackHpCost)) {
           this.showNotEnoughHp();
           isPerformingAction = true;
-        } else if (!this.isGrounded()) {
+        } else if (specialAttackProfile?.mode !== 'buff' && !this.isGrounded()) {
           this.showOnGroundCastWarning();
           isPerformingAction = true;
         } else {
@@ -2128,6 +3478,7 @@ export default class Player extends Character {
     this.updateHeal();
     this.updateIdleBreakState(isPerformingAction, movingX);
     this.updateManaRegeneration();
+    this.updateSpecialBuffHpRegen();
     this.updateNameLabelPosition();
   }
 
@@ -2400,6 +3751,43 @@ export default class Player extends Character {
   }
 
   /**
+   * Regenerates 0.6% of max HP per second while the Power Charge buff is active.
+   * Stops automatically once all stacks are consumed and the buff ends.
+   */
+  updateSpecialBuffHpRegen() {
+    if (!this.isSpecialBuffActive()) {
+      this.specialBuffHpRegenLastAt = null;
+      return;
+    }
+
+    const now = this.scene.time.now;
+    if (this.specialBuffHpRegenLastAt === null) {
+      this.specialBuffHpRegenLastAt = now;
+      return;
+    }
+
+    const tickIntervalMs = 1000;
+    const elapsed = now - this.specialBuffHpRegenLastAt;
+    if (elapsed < tickIntervalMs) {
+      return;
+    }
+
+    const ticks = Math.floor(elapsed / tickIntervalMs);
+    this.specialBuffHpRegenLastAt += ticks * tickIntervalMs;
+
+    if (this.currentHp >= this.maxHp) {
+      return;
+    }
+
+    const healPerTick = Math.max(1, Math.round(this.maxHp * 0.006));
+    const totalHeal = healPerTick * ticks;
+    const actualHeal = Math.min(totalHeal, this.maxHp - this.currentHp);
+    this.currentHp = Math.min(this.maxHp, this.currentHp + actualHeal);
+    this.showDamagePopup(this.x, this.y - 28, `+${actualHeal}`, '#7CFF8A', 900, 60);
+    this.scene?.refreshPlayerUi?.();
+  }
+
+  /**
    * Updates all player attack hitboxes against the current animation frame.
    * This is the bridge between animation timing and collision-based combat.
    */
@@ -2528,22 +3916,29 @@ export default class Player extends Character {
       return;
     }
 
-    this.spinHitBox.follow(this, this.flipX ? -7 : 7, 0);
+    const hitboxConfig = this.configureAttackHitbox(this.spinHitBox, {
+      width: 145,
+      height: 40,
+      offsetX: 7,
+      offsetY: 0,
+      activeFrames: [{ start: 1, end: 1 }],
+    }, spinProfile);
 
     if (!spinKey) {
       this.spinHitBox.body.enable = false;
       return;
     }
 
-    if (this.anims.currentAnim?.key === spinKey && this.anims.currentFrame?.index === 1) {
+    const currentFrame = this.anims.currentFrame?.index ?? -1;
+    if (this.anims.currentAnim?.key === spinKey && this.isFrameWithinActiveWindow(currentFrame, hitboxConfig.activeFrames)) {
       if (!this.spinStepApplied) {
         this.x += this.flipX ? -18 : 18;
         this.spinStepApplied = true;
       }
 
       this.spinHitBox.body.enable = true;
-      this.playAttackSound({ key: 'spinAttack', volume: 1.2, triggerFrames: [1] }, 'spinAttack');
-    } else if (this.anims.currentAnim?.key === spinKey && this.anims.currentFrame?.index >= 4) {
+      this.playAttackSound(spinProfile?.sound ?? { key: 'spinAttack', volume: 1.2, triggerFrames: [1] }, 'spinAttack');
+    } else if (this.anims.currentAnim?.key === spinKey) {
       this.spinHitBox.body.enable = false;
       this.spinStepApplied = false;
     } else if (this.anims.currentAnim?.key !== spinKey) {
@@ -2606,6 +4001,11 @@ export default class Player extends Character {
     }
 
     const currentFrame = this.anims.currentFrame?.index ?? 0;
+    if (specialMode === 'buff') {
+      this.updateSpecialBuffShockwave(specialAttackProfile);
+      return;
+    }
+
     if (specialMode === 'animationOnly') {
       this.specialAttackHitBox.body.enable = false;
       this.isUntouchable = false;
@@ -2635,7 +4035,11 @@ export default class Player extends Character {
         }
       }
 
-      if (this.anims.currentAnim?.key === specialAttackKey && this.isFrameWithinActiveWindow(currentFrame, hitboxConfig.activeFrames)) {
+      if (
+        this.anims.currentAnim?.key === specialAttackKey
+        && this.isFrameWithinActiveWindow(currentFrame, hitboxConfig.activeFrames)
+        && this.canUseSpecialAttackStrike(currentFrame, specialAttackProfile)
+      ) {
         this.specialAttackHitBox.body.enable = true;
       } else {
         this.specialAttackHitBox.body.enable = false;
@@ -2764,9 +4168,12 @@ export default class Player extends Character {
     this.trackedSurpriseEnemy = null;
     this.trackedSpecialEnemy = null;
     this.lastSpecialStrikeFrame = null;
+    this.specialAttackStrikeCount = 0;
+    this.lastSpecialAttackCountedFrame = null;
     this.specialAttackAnchorY = null;
     this.specialAttackCastOrigin = null;
     this.specialAttackReturnPosition = null;
+    this.deactivateSpecialBuff();
     this.isMovementDashing = false;
     this.movementDashDirection = 0;
     this.movementDashEndsAt = 0;
